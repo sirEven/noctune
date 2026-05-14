@@ -1,0 +1,68 @@
+# Noctune Configuration
+# Copy to ~/.noctune/config.yaml and edit
+
+# Directory to watch for new music files
+source_dir: ~/Music/Incoming
+
+# Remote destination (your Navidrome server)
+dest_host: 192.168.178.107
+dest_user: eversin
+dest_dir: /data/music
+
+# File types to process
+valid_extensions:
+  - .mp3
+  - .flac
+  - .wav
+  - .m4a
+  - .ogg
+  - .aac
+
+# Curated genre vocabulary — LLM can only pick from this list
+# New genres require human approval via the review queue
+genre_vocabulary:
+  - Ambient
+  - Blues
+  - Classical
+  - Country
+  - Dance
+  - Electronic
+  - Experimental
+  - Folk
+  - Funk
+  - Hip Hop
+  - Indie
+  - Industrial
+  - Jazz
+  - Lo-Fi
+  - Metal
+  - New Wave
+  - Pop
+  - Post-Punk
+  - Punk
+  - R&B
+  - Reggae
+  - Rock
+  - Shoegaze
+  - Singer-Songwriter
+  - Soul
+  - Soundtrack
+  - Synthpop
+  - World
+
+# LLM routing — local Ollama, cloud, or any OpenAI-compatible endpoint
+llm:
+  direction: local              # "local" or "cloud"
+  local_base_url: http://localhost:11434
+  local_model: llama3:8b
+  cloud_base_url: https://api.ollama.com/v1
+  cloud_api_key: ${OLLAMA_API_KEY}  # or set env var
+  cloud_model: llama3:70b
+  fallback: cloud              # "cloud" or "local" — fallback when primary fails
+  batch_size: 20               # tracks per LLM reconciliation call
+
+# Auto-transfer threshold — 0.8 = 80% confidence auto-transfers, below goes to review queue
+confidence_threshold: 0.8
+
+# Seconds to wait after last file event before processing (debounce)
+debounce_seconds: 5.0
