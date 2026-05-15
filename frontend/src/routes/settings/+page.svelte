@@ -524,9 +524,13 @@
 			{#if remotePaths?.mounts && remotePaths.mounts.length > 0}
 				<div>
 					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Available storage on remote</p>
+					<p class="text-xs text-text-muted mb-1.5">Click a mount to use as base path</p>
 					<div class="space-y-1">
 						{#each remotePaths.mounts as mount}
-							<div class="flex items-center gap-2 px-3 py-1.5 rounded text-xs bg-surface-700/50">
+							<button
+								class="w-full text-left flex items-center gap-2 px-3 py-1.5 rounded text-xs bg-surface-700/50 hover:bg-surface-700 transition-colors"
+								onclick={() => { navidromeMusicFolder = mount.mount_point + '/'; destDir = mount.mount_point + '/'; }}
+							>
 								<span class="font-mono text-text-secondary">{mount.device}</span>
 								<span class="text-text-muted">→</span>
 								<span class="font-mono text-text-primary">{mount.mount_point}</span>
@@ -536,7 +540,7 @@
 								{#if mount.on_root}
 									<span class="px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-400 text-[10px] border border-amber-600/30">OS disk</span>
 								{/if}
-							</div>
+							</button>
 						{/each}
 					</div>
 				</div>

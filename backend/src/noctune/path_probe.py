@@ -494,8 +494,7 @@ def probe_remote_paths(
         "docker_config_container": 4,
         "navidrome_config": 5,
         "docker_volume": 6,
-        "mount_scan": 7,
-        "common_path": 8,
+        "common_path": 7,
     }
 
     LABELS = {
@@ -506,7 +505,6 @@ def probe_remote_paths(
         "docker_config_container": "Navidrome config (MusicFolder) — container path, host path unknown",
         "docker_volume": "Docker named volume — managed by Docker",
         "navidrome_config": "Navidrome config file MusicFolder setting",
-        "mount_scan": "Found on mounted storage",
         "common_path": "Common path — not verified as Navidrome's",
     }
 
@@ -653,20 +651,6 @@ def probe_remote_paths(
         rc, _, _ = _ssh_command(host, user, port, f"test -d {path} && echo yes", password=password)
         add_candidate(path, "common_path", exists=rc == 0)
 
-    # --- Step 8: Scan mount points for music-like directories ---
-    storage_mounts_raw = _get_mounts(host, user, port, password)
-    for mount in storage_mounts_raw:
-        mp = mount.get("mount_point", "")
-        if not mp or mp == "/":
-            continue  # Skip root — already covered by common paths
-        for subdir in ("Noctune/Music", "Music", "music", "Media/Music"):
-            candidate_path = f"{mp.rstrip('/')}/{subdir}"
-            if candidate_path in seen_host_paths:
-                continue
-            rc, _, _ = _ssh_command(host, user, port, f"test -d '{candidate_path}' && echo yes", password=password)
-            if rc == 0:
-                add_candidate(candidate_path, "mount_scan", exists=True)
-
     # Sort: navidrome_uses first, then by priority, then alphabetically
     candidates.sort(key=lambda c: (
         not c.get("navidrome_uses", False),
@@ -674,8 +658,8 @@ def probe_remote_paths(
         c["path"],
     ))
 
-    # Reuse the mounts we already discovered via _get_mounts
-    storage_mounts = storage_mounts_raw
+    # Discover real storage mounts on the remote
+    storage_mounts = _get_mounts(host, user, port, password)
 
     return {
         "music_folder": candidates,
