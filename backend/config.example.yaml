@@ -20,35 +20,12 @@ valid_extensions:
 
 # Curated genre vocabulary — LLM can only pick from this list
 # New genres require human approval via the review queue
-genre_vocabulary:
-  - Ambient
-  - Blues
-  - Classical
-  - Country
-  - Dance
-  - Electronic
-  - Experimental
-  - Folk
-  - Funk
-  - Hip Hop
-  - Indie
-  - Industrial
-  - Jazz
-  - Lo-Fi
-  - Metal
-  - New Wave
-  - Pop
-  - Post-Punk
-  - Punk
-  - R&B
-  - Reggae
-  - Rock
-  - Shoegaze
-  - Singer-Songwriter
-  - Soul
-  - Soundtrack
-  - Synthpop
-  - World
+# Default: uses the built-in ~65 genre vocabulary if omitted
+# Override here to customize:
+# genre_vocabulary:
+#   - Rock
+#   - Pop
+#   - ...
 
 # LLM routing — local Ollama, cloud, or any OpenAI-compatible endpoint
 llm:

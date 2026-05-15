@@ -23,6 +23,7 @@ from noctune.models.pipeline import FileState, PipelineStatus
 from noctune.models.track import TagSet
 from noctune.store import StateStore
 from noctune.daemon import DaemonManager
+from noctune.genres import GENRE_VOCABULARY, find_closest_genre, validate_genre
 
 logger = logging.getLogger(__name__)
 
@@ -313,3 +314,25 @@ async def read_config() -> dict[str, Any]:
     """Read the current configuration."""
     config = get_config()
     return config.model_dump(mode="json")
+
+
+# --- Genres ---
+
+@router.get("/genres")
+async def list_genres() -> dict[str, list[str]]:
+    """Return the curated genre vocabulary."""
+    return {"genres": list(GENRE_VOCABULARY)}
+
+
+@router.get("/genres/validate")
+async def validate_genre_endpoint(genre: str) -> dict[str, Any]:
+    """Validate a genre against the vocabulary.
+
+    Returns the canonical name if valid, or the closest match if not.
+    """
+    validated = validate_genre(genre)
+    if validated:
+        return {"genre": validated, "valid": True, "closest": None}
+
+    closest = find_closest_genre(genre)
+    return {"genre": genre, "valid": False, "closest": closest}

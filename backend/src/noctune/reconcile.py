@@ -10,6 +10,7 @@ import json
 import logging
 from typing import Any
 
+from noctune.genres import find_closest_genre, validate_genre
 from noctune.llm_router import LLMRouter
 from noctune.models.track import TagSet
 
@@ -133,10 +134,19 @@ async def reconcile_tags(
             confidence=parsed.get("confidence", 0.5),
         )
 
-        # Check if genre is in vocabulary
-        if result.genre and result.genre not in genre_vocabulary:
-            result.genre_not_in_vocabulary = True
-            logger.info("Genre '%s' not in vocabulary — flagging for review", result.genre)
+        # Check if genre is in vocabulary — try closest match first, then flag for review
+        if result.genre:
+            validated = validate_genre(result.genre)
+            if validated:
+                result.genre = validated  # Normalize to canonical casing
+            else:
+                closest = find_closest_genre(result.genre)
+                if closest:
+                    logger.info("Genre '%s' not in vocabulary — mapped to closest match '%s'", result.genre, closest)
+                    result.genre = closest
+                else:
+                    result.genre_not_in_vocabulary = True
+                    logger.info("Genre '%s' not in vocabulary and no close match — flagging for review", result.genre)
 
         return result
 

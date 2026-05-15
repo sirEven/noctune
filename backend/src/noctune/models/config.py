@@ -4,6 +4,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from noctune.genres import GENRE_VOCABULARY
+
 
 class LLMConfig(BaseModel):
     """LLM routing configuration — local Ollama, cloud, or any OpenAI-compatible endpoint."""
@@ -26,7 +28,7 @@ class NoctuneConfig(BaseModel):
     dest_user: str = "eversin"
     dest_dir: Path = Path("/data/music")
     valid_extensions: list[str] = [".mp3", ".flac", ".wav", ".m4a", ".ogg", ".aac"]
-    genre_vocabulary: list[str] = []
+    genre_vocabulary: list[str] = list(GENRE_VOCABULARY)
     llm: LLMConfig = LLMConfig()
     confidence_threshold: float = 0.8
     debounce_seconds: float = 5.0

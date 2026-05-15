@@ -108,7 +108,7 @@ class TestReconcileTags:
         assert result.confidence == 0.95
 
     async def test_reconcile_clamps_unknown_genre(self) -> None:
-        """LLM is told to pick from vocabulary — if it returns unknown, we flag it."""
+        """LLM returns a genre not in vocabulary — maps to closest match if possible, flags if not."""
         mock_router = AsyncMock(spec=LLMRouter)
         mock_router.complete.return_value = json.dumps({
             "artist": "Radiohead",
@@ -128,8 +128,29 @@ class TestReconcileTags:
             llm_router=mock_router,
         )
 
-        # Genre should be flagged (not in vocabulary) but still set
-        assert result.genre == "Experimental Electronica"
+        # "Experimental Electronica" contains "Electronic" — mapped to closest match
+        assert result.genre == "Electronic"
+        assert result.genre_not_in_vocabulary is not True  # Mapped, not flagged
+
+    async def test_reconcile_flags_unmappable_genre(self) -> None:
+        """Completely unmappable genre is flagged for review."""
+        mock_router = AsyncMock(spec=LLMRouter)
+        mock_router.complete.return_value = json.dumps({
+            "artist": "Artist",
+            "title": "Song",
+            "genre": "Zydeco",  # No close match in vocabulary
+            "confidence": 0.8,
+        })
+
+        result = await reconcile_tags(
+            fingerprint_tags=TagSet(),
+            extracted_tags=TagSet(),
+            genre_vocabulary=["Rock", "Electronic", "Jazz"],
+            llm_router=mock_router,
+        )
+
+        # "Zydeco" has no close match — flagged for review
+        assert result.genre == "Zydeco"
         assert result.genre_not_in_vocabulary is True
 
     async def test_reconcile_with_no_fingerprint_tags(self) -> None:
