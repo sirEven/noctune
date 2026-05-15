@@ -193,14 +193,13 @@
 		</div>
 	{/if}
 
-	<!-- Directories -->
+	<!-- Source Directory (local) -->
 	<div class="card-border-left mb-6">
-		<h3 class="text-lg font-medium text-text-primary mb-3">Directories</h3>
+		<h3 class="text-lg font-medium text-text-primary mb-3">Source Directory (local)</h3>
+		<p class="text-xs text-text-muted mb-4">The folder on <strong>this machine</strong> that Noctune watches for new music files</p>
 
-		<div class="space-y-4">
+		<div class="space-y-3">
 			<div>
-				<label for="source-dir" class="block text-sm font-medium text-text-secondary mb-1">Source Directory</label>
-				<p class="text-xs text-text-muted mb-2">Local directory Noctune watches for new music files</p>
 				<div class="flex gap-2">
 					<input
 						id="source-dir"
@@ -214,29 +213,44 @@
 						onclick={probeLocal}
 						disabled={probingLocal}
 					>
-						🔍 Suggest
+						{probingLocal ? '...' : '🔍 Suggest'}
 					</button>
 				</div>
 			</div>
 
-			<div>
-				<label for="dest-dir" class="block text-sm font-medium text-text-secondary mb-1">Destination Directory</label>
-				<p class="text-xs text-text-muted mb-2">Remote directory where processed music is transferred</p>
-				<div class="flex gap-2">
-					<input
-						id="dest-dir"
-						type="text"
-						bind:value={destDir}
-						placeholder="/data/music"
-						class="flex-1 px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
-					/>
+			<!-- Local path suggestions — right under the field they're for -->
+			{#if localPaths}
+				<div>
+					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on this machine</p>
+					<div class="space-y-1">
+						{#each localPaths.source as candidate}
+							<button
+								class="w-full text-left px-3 py-1.5 rounded text-xs transition-colors {candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
+								onclick={() => { if (candidate.exists) sourceDir = candidate.path; }}
+								disabled={!candidate.exists}
+							>
+								{candidate.path} {candidate.exists ? '✓' : '✗'}
+							</button>
+						{/each}
+					</div>
 				</div>
-			</div>
+			{/if}
+		</div>
+	</div>
 
+	<!-- Remote / Navidrome Connection -->
+	<div class="card-border-left mb-6">
+		<h3 class="text-lg font-medium text-text-primary mb-3">Navidrome Connection</h3>
+		<p class="text-xs text-text-muted mb-4">How Noctune connects to Navidrome on your Pi</p>
+
+		<div class="space-y-4">
+			<!-- Remote Host & User -->
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label for="dest-host" class="block text-sm font-medium text-text-secondary mb-1">Dest Host</label>
+					<label for="remote-host" class="block text-sm font-medium text-text-secondary mb-1">Remote Host</label>
+					<p class="text-xs text-text-muted mb-1">IP or hostname of the Pi</p>
 					<input
+						id="remote-host"
 						type="text"
 						bind:value={destHost}
 						placeholder="192.168.178.107"
@@ -244,8 +258,10 @@
 					/>
 				</div>
 				<div>
-					<label for="dest-user" class="block text-sm font-medium text-text-secondary mb-1">Dest User</label>
+					<label for="remote-user" class="block text-sm font-medium text-text-secondary mb-1">Remote User</label>
+					<p class="text-xs text-text-muted mb-1">SSH username on the Pi</p>
 					<input
+						id="remote-user"
 						type="text"
 						bind:value={destUser}
 						placeholder="eversin"
@@ -253,35 +269,12 @@
 					/>
 				</div>
 			</div>
-		</div>
 
-		<!-- Local path suggestions -->
-		{#if localPaths}
-			<div class="mt-4">
-				<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Local Suggestions</p>
-				<div class="space-y-1">
-					{#each localPaths.source as candidate}
-						<button
-							class="w-full text-left px-3 py-1.5 rounded text-xs transition-colors {candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
-							onclick={() => { if (candidate.exists) sourceDir = candidate.path; }}
-							disabled={!candidate.exists}
-						>
-							{candidate.path} {candidate.exists ? '✓' : '✗'}
-						</button>
-					{/each}
-				</div>
-			</div>
-		{/if}
-	</div>
-
-	<!-- Navidrome Connection -->
-	<div class="card-border-left mb-6">
-		<h3 class="text-lg font-medium text-text-primary mb-3">Navidrome Connection</h3>
-
-		<div class="space-y-4">
+			<!-- Navidrome API -->
 			<div>
-				<label for="navidrome-url" class="block text-sm font-medium text-text-secondary mb-1">URL</label>
+				<label for="navidrome-url" class="block text-sm font-medium text-text-secondary mb-1">Navidrome URL</label>
 				<input
+					id="navidrome-url"
 					type="text"
 					bind:value={navidromeUrl}
 					placeholder="http://192.168.178.107:4533"
@@ -291,8 +284,9 @@
 
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label for="nav-username" class="block text-sm font-medium text-text-secondary mb-1">Username</label>
+					<label for="nav-username" class="block text-sm font-medium text-text-secondary mb-1">Navidrome Username</label>
 					<input
+						id="nav-username"
 						type="text"
 						bind:value={navidromeUsername}
 						placeholder="admin"
@@ -300,8 +294,9 @@
 					/>
 				</div>
 				<div>
-					<label for="nav-password" class="block text-sm font-medium text-text-secondary mb-1">Password</label>
+					<label for="nav-password" class="block text-sm font-medium text-text-secondary mb-1">Navidrome Password</label>
 					<input
+						id="nav-password"
 						type="password"
 						bind:value={navidromePassword}
 						placeholder="••••••••"
@@ -310,11 +305,26 @@
 				</div>
 			</div>
 
+			<!-- Destination Directory (on remote) -->
 			<div>
-				<label for="music-folder" class="block text-sm font-medium text-text-secondary mb-1">Music Folder (on remote)</label>
-				<p class="text-xs text-text-muted mb-2">Absolute path to music directory on the Pi</p>
+				<label for="dest-dir" class="block text-sm font-medium text-text-secondary mb-1">Destination Directory (on remote)</label>
+				<p class="text-xs text-text-muted mb-2">Path on the Pi where processed music lands</p>
+				<input
+					id="dest-dir"
+					type="text"
+					bind:value={destDir}
+					placeholder="/data/music"
+					class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
+				/>
+			</div>
+
+			<!-- Music Folder (for Navidrome API browsing) -->
+			<div>
+				<label for="music-folder" class="block text-sm font-medium text-text-secondary mb-1">Music Folder (Navidrome)</label>
+				<p class="text-xs text-text-muted mb-2">Navidrome's MusicFolder — where it indexes from</p>
 				<div class="flex gap-2">
 					<input
+						id="music-folder"
 						type="text"
 						bind:value={navidromeMusicFolder}
 						placeholder="/data/music"
@@ -325,35 +335,15 @@
 						onclick={probeRemote}
 						disabled={probingRemote}
 					>
-						🔍 Probe Pi
+						{probingRemote ? '...' : '🔍 Probe Pi'}
 					</button>
-				</div>
-			</div>
-
-			<div class="grid grid-cols-2 gap-4">
-				<div>
-					<label for="ssh-host" class="block text-sm font-medium text-text-secondary mb-1">SSH Host</label>
-					<input
-						type="text"
-						bind:value={navidromeSshHost}
-						placeholder="192.168.178.107"
-						class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
-					/>
-				</div>
-				<div>
-					<label for="ssh-port" class="block text-sm font-medium text-text-secondary mb-1">SSH Port</label>
-					<input
-						type="number"
-						bind:value={navidromeSshPort}
-						class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
-					/>
 				</div>
 			</div>
 
 			<!-- Remote path suggestions -->
 			{#if remotePaths}
-				<div class="mt-2">
-					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Remote Suggestions</p>
+				<div>
+					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on the Pi</p>
 					<div class="space-y-1">
 						{#each remotePaths.music_folder as candidate}
 							<button
@@ -368,6 +358,28 @@
 					</div>
 				</div>
 			{/if}
+
+			<div class="grid grid-cols-2 gap-4">
+				<div>
+					<label for="ssh-host" class="block text-sm font-medium text-text-secondary mb-1">SSH Host</label>
+					<input
+						id="ssh-host"
+						type="text"
+						bind:value={navidromeSshHost}
+						placeholder="192.168.178.107"
+						class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
+					/>
+				</div>
+				<div>
+					<label for="ssh-port" class="block text-sm font-medium text-text-secondary mb-1">SSH Port</label>
+					<input
+						id="ssh-port"
+						type="number"
+						bind:value={navidromeSshPort}
+						class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
+					/>
+				</div>
+			</div>
 
 			<!-- Connection test result -->
 			{#if navidromeTest}
