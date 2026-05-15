@@ -149,12 +149,19 @@ def _get_filesystem_info(
     Uses df to find: device, mount point, filesystem type, total size, used%.
     Returns dict with keys: device, mount_point, fstype, size, used_pct, on_root.
     """
-    # df -P for POSIX output, --output=device,target,fstype,size,pcent
+    # df -h for human-readable sizes
     rc, stdout, _ = _ssh_command(
         host, user, port,
-        f"df -P --output=source,target,fstype,size,pcent '{path}' 2>/dev/null",
+        f"df -h --output=source,target,fstype,size,pcent '{path}' 2>/dev/null",
         password=password,
     )
+    if rc != 0 or not stdout.strip():
+        # Fallback: without -h (some systems don't support --output with -h)
+        rc, stdout, _ = _ssh_command(
+            host, user, port,
+            f"df --output=source,target,fstype,size,pcent '{path}' 2>/dev/null",
+            password=password,
+        )
     if rc != 0 or not stdout.strip():
         return {}
 

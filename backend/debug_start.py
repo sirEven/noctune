@@ -11,7 +11,7 @@ import uvicorn
 from pathlib import Path
 from noctune.main import create_app
 
-app = create_app()
+app = create_app(config_path=Path("~/.noctune/config.yaml"))
 print(f"Created app with {len(app.routes)} routes")
 sys.stdout.flush()
 
