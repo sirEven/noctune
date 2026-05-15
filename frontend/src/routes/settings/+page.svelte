@@ -8,12 +8,14 @@
 		is_dir: boolean;
 	}
 
-		interface MusicCandidate {
+	interface MusicCandidate {
 		path: string;
+		container_path: string | null;
 		exists: boolean;
 		source: string;
 		label: string;
 		recommended: boolean;
+		warning: string | null;
 	}
 
 	interface NavidromeTest {
@@ -436,10 +438,10 @@
 				{:else if remotePaths.music_folder?.length > 0}
 					<div>
 						<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
-						<div class="space-y-1">
+						<div class="space-y-1.5">
 							{#each remotePaths.music_folder as candidate}
 								<button
-									class="w-full text-left px-3 py-2 rounded text-xs transition-colors {candidate.recommended ? 'bg-primary/15 border border-primary/40 text-text-primary' : candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
+									class="w-full text-left px-3 py-2 rounded text-xs transition-colors {candidate.recommended ? 'bg-primary/15 border border-primary/40 text-text-primary' : candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}  {!candidate.exists && !candidate.recommended ? 'opacity-60' : ''}"
 									onclick={() => {
 										if (candidate.exists || candidate.recommended) {
 											navidromeMusicFolder = candidate.path;
@@ -448,16 +450,22 @@
 									}}
 									disabled={!candidate.exists && !candidate.recommended}
 								>
-									<div class="flex items-center gap-2">
+									<div class="flex items-center gap-2 flex-wrap">
 										{#if candidate.recommended}
 											<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary text-white leading-none">RECOMMENDED</span>
 										{/if}
-										<span class="font-medium">{candidate.path}</span>
+										<span class="font-medium font-mono">{candidate.path}</span>
 										{#if !candidate.exists}
 											<span class="text-text-muted">✗ not found</span>
 										{/if}
+										{#if candidate.container_path && candidate.container_path !== candidate.path}
+											<span class="text-text-muted">← {candidate.container_path} in container</span>
+										{/if}
 									</div>
 									<div class="text-text-muted mt-0.5">{candidate.label}</div>
+									{#if candidate.warning}
+										<div class="mt-1 text-error/80 text-[11px]">⚠ {candidate.warning}</div>
+									{/if}
 								</button>
 							{/each}
 						</div>
