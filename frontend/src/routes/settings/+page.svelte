@@ -16,6 +16,13 @@
 		label: string;
 		recommended: boolean;
 		warning: string | null;
+		mount_type: string | null;
+		device: string | null;
+		mount_point: string | null;
+		fstype: string | null;
+		size: string | null;
+		used_pct: string | null;
+		on_root: boolean;
 	}
 
 	interface NavidromeTest {
@@ -53,7 +60,7 @@
 
 	let config = $state<Config | null>(null);
 	let localPaths = $state<{ source: PathCandidate[]; dest: PathCandidate[] } | null>(null);
-	let remotePaths = $state<{ music_folder: MusicCandidate[]; error?: string } | null>(null);
+	let remotePaths = $state<{ music_folder: MusicCandidate[]; navidrome_type?: string; error?: string } | null>(null);
 	let navidromeTest = $state<NavidromeTest | null>(null);
 	let sshTest = $state<SshTest | null>(null);
 	let saving = $state(false);
@@ -437,11 +444,17 @@
 					</div>
 				{:else if remotePaths.music_folder?.length > 0}
 					<div>
-						<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
-						<div class="space-y-1.5">
+						{#if remotePaths.navidrome_type === 'docker'}
+							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Navidrome runs in Docker — host paths shown</p>
+						{:else if remotePaths.navidrome_type === 'bare_metal'}
+							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Navidrome runs bare-metal on this machine</p>
+						{:else}
+							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Found on remote</p>
+						{/if}
+						<div class="space-y-2">
 							{#each remotePaths.music_folder as candidate}
 								<button
-									class="w-full text-left px-3 py-2 rounded text-xs transition-colors {candidate.recommended ? 'bg-primary/15 border border-primary/40 text-text-primary' : candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}  {!candidate.exists && !candidate.recommended ? 'opacity-60' : ''}"
+									class="w-full text-left px-3 py-2.5 rounded text-xs transition-colors {candidate.recommended ? 'bg-primary/15 border border-primary/40 text-text-primary' : candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}  {!candidate.exists && !candidate.recommended ? 'opacity-60' : ''}"
 									onclick={() => {
 										if (candidate.exists || candidate.recommended) {
 											navidromeMusicFolder = candidate.path;
@@ -450,9 +463,10 @@
 									}}
 									disabled={!candidate.exists && !candidate.recommended}
 								>
+									<!-- Top line: badge + path + container mapping -->
 									<div class="flex items-center gap-2 flex-wrap">
 										{#if candidate.recommended}
-											<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary text-white leading-none">RECOMMENDED</span>
+											<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary text-white leading-none shrink-0">RECOMMENDED</span>
 										{/if}
 										<span class="font-medium font-mono">{candidate.path}</span>
 										{#if !candidate.exists}
@@ -462,14 +476,39 @@
 											<span class="text-text-muted">← {candidate.container_path} in container</span>
 										{/if}
 									</div>
+									<!-- Second line: source label -->
 									<div class="text-text-muted mt-0.5">{candidate.label}</div>
-									{#if candidate.warning}
-										<div class="mt-1 text-error/80 text-[11px]">⚠ {candidate.warning}</div>
+									<!-- Third line: device context chips -->
+									{#if candidate.device || candidate.fstype || candidate.size}
+										<div class="flex items-center gap-1.5 flex-wrap mt-1">
+											{#if candidate.mount_type === 'bind'}
+												<span class="px-1.5 py-0.5 rounded bg-surface-600/60 text-text-muted text-[10px]">bind mount</span>
+											{:else if candidate.mount_type === 'volume'}
+												<span class="px-1.5 py-0.5 rounded bg-surface-600/60 text-text-muted text-[10px]">Docker volume</span>
+											{/if}
+											{#if candidate.device}
+												<span class="px-1.5 py-0.5 rounded bg-surface-600/60 text-text-muted text-[10px]">{candidate.device}</span>
+											{/if}
+											{#if candidate.fstype}
+												<span class="px-1.5 py-0.5 rounded bg-surface-600/60 text-text-muted text-[10px]">{candidate.fstype}</span>
+											{/if}
+											{#if candidate.size}
+												<span class="px-1.5 py-0.5 rounded bg-surface-600/60 text-text-muted text-[10px]">{candidate.size}</span>
+											{/if}
+											{#if candidate.used_pct}
+												<span class="px-1.5 py-0.5 rounded bg-surface-600/60 text-text-muted text-[10px]">{candidate.used_pct}% used</span>
+											{/if}
+											{#if candidate.on_root}
+												<span class="px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-400 text-[10px] border border-amber-600/30">OS disk</span>
+											{/if}
+										</div>
 									{/if}
 								</button>
 							{/each}
 						</div>
 					</div>
+				{:else if !remotePaths.error}
+					<p class="text-xs text-text-muted">No music paths found on remote</p>
 				{/if}
 			{/if}
 

@@ -1,18 +1,16 @@
-"""Path probing — suggest likely source and destination directories.
+"""Path probing — discover source and destination directories.
 
 Probes the local filesystem and remote filesystem to suggest
 likely source_dir, dest_dir, and Navidrome music folder paths.
 
 No LLM needed — just filesystem checks, Docker inspect, and reading Navidrome's config.
 
-Key insight: when Navidrome runs in Docker, there are THREE different paths:
-  - Container path: /music (what Navidrome sees via ND_MUSICFOLDER)
-  - Host bind-mount path: /data/music (on the SSD/storage, mounted into container)
-  - Named volume: navidrome-data (lives under /var/lib/docker/volumes/ on the OS disk)
+Key design principle: the probe gathers FACTS, not opinions.
+It discovers what exists, how Docker maps paths, and which device/filesystem
+a path lives on. The user decides what's right for their setup.
 
-Noctune needs the HOST path for rsync/SSH. The probe resolves container paths
-to their host equivalents via Docker inspect, and warns about named volumes
-(which typically live on the microSD/OS disk, not on external storage).
+A 400GB microSD is a perfectly valid music store. A named Docker volume
+might be exactly what the user wants. We present the facts; the user chooses.
 """
 
 from __future__ import annotations
@@ -143,6 +141,51 @@ def _ssh_available(host: str, user: str, port: int = 22, password: str = "") -> 
     return False, f"SSH failed: {detail}"
 
 
+def _get_filesystem_info(
+    host: str, user: str, port: int, path: str, password: str = "",
+) -> dict[str, str]:
+    """Get filesystem info for a path on the remote machine.
+
+    Uses df to find: device, mount point, filesystem type, total size, used%.
+    Returns dict with keys: device, mount_point, fstype, size, used_pct, on_root.
+    """
+    # df -P for POSIX output, --output=device,target,fstype,size,pcent
+    rc, stdout, _ = _ssh_command(
+        host, user, port,
+        f"df -P --output=source,target,fstype,size,pcent '{path}' 2>/dev/null",
+        password=password,
+    )
+    if rc != 0 or not stdout.strip():
+        return {}
+
+    lines = stdout.strip().splitlines()
+    if len(lines) < 2:
+        return {}
+
+    # Parse: Filesystem Mounted on Type Size Use%
+    fields = lines[1].split()
+    if len(fields) < 5:
+        return {}
+
+    device = fields[0]
+    mount_point = fields[1]
+    fstype = fields[2]
+    size = fields[3]
+    used_pct = fields[4].rstrip("%")
+
+    # Check if this is the root device
+    on_root = mount_point == "/"
+
+    return {
+        "device": device,
+        "mount_point": mount_point,
+        "fstype": fstype,
+        "size": size,
+        "used_pct": used_pct,
+        "on_root": on_root,
+    }
+
+
 def _docker_inspect_mounts(
     host: str, user: str, port: int, container_id: str, password: str = "",
 ) -> list[dict]:
@@ -152,9 +195,9 @@ def _docker_inspect_mounts(
       - type: "bind" or "volume"
       - source: host path (for bind) or volume name (for volume)
       - destination: container path
+      - name: volume name (for named volumes)
       - rw: read-write flag
     """
-    # Use JSON format for reliable parsing
     rc, stdout, _ = _ssh_command(
         host, user, port,
         f"docker inspect {container_id} --format='{{{{json .Mounts}}}}'",
@@ -166,7 +209,6 @@ def _docker_inspect_mounts(
     try:
         mounts_raw = json.loads(stdout.strip())
     except json.JSONDecodeError:
-        # Fallback: try the longer format
         rc, stdout, _ = _ssh_command(
             host, user, port,
             f"docker inspect {container_id}",
@@ -192,10 +234,8 @@ def _docker_inspect_mounts(
         source = mount.get("Source", "")
         destination = mount.get("Destination", "")
         rw = mount.get("RW", True)
-        # For named volumes, Source is the path on disk under /var/lib/docker/volumes/
-        # For bind mounts, Source is the actual host path
         result.append({
-            "type": mount_type,  # "bind" or "volume"
+            "type": mount_type,
             "source": source,
             "destination": destination,
             "name": mount.get("Name", ""),
@@ -243,37 +283,46 @@ def probe_remote_paths(
 ) -> dict:
     """Probe the remote machine for likely Navidrome music folder paths.
 
-    When Navidrome runs in Docker, there are important distinctions:
-    - Container path (e.g. /music): what Navidrome sees internally
-    - Host bind-mount path (e.g. /data/music): the real path on disk, what SSH/rsync needs
-    - Named volume: a Docker-managed volume, usually on the OS disk (microSD on a Pi)
+    Gathers factual context about each path:
+    - Whether Navidrome runs in Docker or bare-metal
+    - Container ↔ host path mappings (for Docker)
+    - Device and filesystem info (which disk, how big, how full)
+    - Whether the path is on the root device or a separate mount
 
-    Noctune needs the HOST path for rsync/SSH operations. This function resolves
-    container paths to their host equivalents via Docker inspect, and warns about
-    named volumes (which typically live on the microSD/OS disk).
+    No judgments — the user decides what's right for their setup.
 
-    Returns candidates with:
-      - path: the HOST path (what Noctune should use)
-      - container_path: the path Navidrome sees (if different)
-      - source: how we found it
-      - label: human-readable explanation
-      - recommended: whether this is the best choice
-      - warning: optional warning string (e.g. "on OS disk" for named volumes)
-      - exists: whether the path exists on disk
+    Returns:
+      {
+        "navidrome_type": "docker" | "bare_metal" | "not_found",
+        "music_folder": [
+          {
+            "path": "/data/music",           # host path (what Noctune uses for rsync/SSH)
+            "container_path": "/music",       # what Navidrome sees (None if bare-metal)
+            "source": "docker_env_resolved",  # how we found it
+            "label": "...",                   # human-readable explanation
+            "recommended": True,             # best guess based on source authority
+            "exists": True,
+            "device": "/dev/sda1",           # filesystem device
+            "mount_point": "/data",           # mount point
+            "fstype": "ext4",                 # filesystem type
+            "size": "234G",                   # total size
+            "used_pct": "45",                 # used percentage
+            "on_root": False,                 # True if on root device (typically OS disk)
+            "mount_type": "bind",            # "bind" | "volume" | None
+          },
+          ...
+        ],
+        "error": None | "error message"
+      }
     """
     ssh_ok, ssh_msg = _ssh_available(host, user, port, password)
     if not ssh_ok:
-        return {"music_folder": [], "error": ssh_msg}
+        return {"music_folder": [], "navidrome_type": "unknown", "error": ssh_msg}
 
+    navidrome_type = "not_found"
     candidates: list[dict] = []
     seen_host_paths: set[str] = set()
     best_priority = 99
-
-    # Priority order: docker_env_resolved > docker_bind > docker_env_container > common_path
-    # docker_env_resolved = we found ND_MUSICFOLDER AND resolved it to the host path
-    # docker_bind = we found a bind mount for music
-    # docker_env_container = we found ND_MUSICFOLDER but couldn't resolve to host path
-    # common_path = just a directory that exists
 
     PRIORITY = {
         "docker_env_resolved": 0,
@@ -287,33 +336,33 @@ def probe_remote_paths(
     }
 
     LABELS = {
-        "docker_env_resolved": "Navidrome container env (ND_MUSICFOLDER), resolved to host path",
-        "docker_bind": "Docker bind mount — host path for music directory",
-        "docker_env_container": "Navidrome container env (ND_MUSICFOLDER) — container path, host path unknown",
-        "docker_config_resolved": "Navidrome config (MusicFolder), resolved to host path",
+        "docker_env_resolved": "Navidrome env (ND_MUSICFOLDER) resolved to host path",
+        "docker_bind": "Docker bind mount — host directory mounted into container",
+        "docker_env_container": "Navidrome env (ND_MUSICFOLDER) — container path only, host path unknown",
+        "docker_config_resolved": "Navidrome config (MusicFolder) resolved to host path",
         "docker_config_container": "Navidrome config (MusicFolder) — container path, host path unknown",
-        "docker_volume": "Docker named volume — stored on the OS disk, not external storage",
-        "navidrome_config": "Navidrome config file — MusicFolder setting",
-        "common_path": "Common path — exists on disk but not verified as Navidrome's",
+        "docker_volume": "Docker named volume — managed by Docker",
+        "navidrome_config": "Navidrome config file MusicFolder setting",
+        "common_path": "Path exists on disk — not verified as Navidrome's",
     }
 
     def add_candidate(
         host_path: str,
         source: str,
         container_path: str | None = None,
-        warning: str | None = None,
+        mount_type: str | None = None,
         exists: bool = True,
     ) -> None:
+        """Add a candidate path with device/filesystem context."""
         nonlocal best_priority
         if host_path in seen_host_paths:
-            # Deduplicate: keep the one with better priority
             for c in candidates:
                 if c["path"] == host_path:
                     if PRIORITY.get(source, 99) < PRIORITY.get(c["source"], 99):
                         c["source"] = source
                         c["label"] = LABELS.get(source, source)
                         c["container_path"] = container_path or c.get("container_path")
-                        c["warning"] = warning or c.get("warning")
+                        c["mount_type"] = mount_type or c.get("mount_type")
                     return
         seen_host_paths.add(host_path)
 
@@ -323,26 +372,24 @@ def probe_remote_paths(
                 c["recommended"] = False
             best_priority = PRIORITY.get(source, 99)
 
-        # Build display label
-        label = LABELS.get(source, source)
-        if container_path and container_path != host_path:
-            label += f" — maps {host_path} → {container_path} in container"
-        elif container_path and container_path == host_path:
-            # Bare-metal, no container mapping needed
-            pass
+        # Gather device/filesystem context
+        fs_info = {}
+        if exists:
+            fs_info = _get_filesystem_info(host, user, port, host_path, password)
 
         candidates.append({
             "path": host_path,
             "container_path": container_path,
             "exists": exists,
             "source": source,
-            "label": label,
+            "label": LABELS.get(source, source),
             "recommended": is_recommended,
-            "warning": warning,
+            "mount_type": mount_type,
+            **fs_info,  # device, mount_point, fstype, size, used_pct, on_root
         })
 
     # --- Step 1: Find Navidrome Docker container ---
-    container_music_path: str | None = None  # container path (e.g. /music)
+    container_music_path: str | None = None
     container_id = ""
 
     rc, stdout, _ = _ssh_command(
@@ -351,98 +398,62 @@ def probe_remote_paths(
         password=password,
     )
     if rc == 0 and stdout.strip():
+        navidrome_type = "docker"
         container_id = stdout.strip().split()[0]
-
-        # Get ND_MUSICFOLDER from container env
         container_music_path = _find_container_music_folder(host, user, port, container_id, password)
-
-        # Get MusicFolder from container config
         if not container_music_path:
             container_music_path = _find_container_config_musicfolder(host, user, port, container_id, password)
 
     # --- Step 2: Get Docker mount info ---
+    bind_map: dict[str, str] = {}  # container_path → host_path
     mounts: list[dict] = []
     if container_id:
         mounts = _docker_inspect_mounts(host, user, port, container_id, password)
-
-    # Build a map: container_path → host_path (for bind mounts)
-    bind_map: dict[str, str] = {}  # container_path → host_path
-    volume_names: list[str] = []  # named volume paths on host
-
-    for mount in mounts:
-        if mount["type"] == "bind":
-            bind_map[mount["destination"]] = mount["source"]
-        elif mount["type"] == "volume" and mount.get("name"):
-            volume_names.append(mount["name"])
+        for mount in mounts:
+            if mount["type"] == "bind":
+                bind_map[mount["destination"]] = mount["source"]
 
     # --- Step 3: Resolve container ND_MUSICFOLDER to host path ---
     if container_music_path:
         if container_music_path in bind_map:
-            # Best case: container path maps to a host bind mount
             host_path = bind_map[container_music_path]
-            add_candidate(
-                host_path,
-                "docker_env_resolved",
-                container_path=container_music_path,
-            )
+            add_candidate(host_path, "docker_env_resolved", container_path=container_music_path, mount_type="bind")
         else:
-            # Container path doesn't map to a bind mount — check if it's a named volume
-            is_volume = any(
-                m["destination"] == container_music_path and m["type"] == "volume"
-                for m in mounts
-            )
-            if is_volume:
-                # Named volume — lives on OS disk, usually bad for music storage
-                # Find the actual path on disk
-                volume_name = ""
-                for m in mounts:
-                    if m["destination"] == container_music_path and m["type"] == "volume":
-                        volume_name = m.get("name", "")
-                        break
+            # Check if it's a named volume
+            volume_mount = None
+            for m in mounts:
+                if m["destination"] == container_music_path and m["type"] == "volume":
+                    volume_mount = m
+                    break
 
+            if volume_mount:
+                # Named volume — find the real disk path
+                volume_name = volume_mount.get("name", "")
                 rc, stdout, _ = _ssh_command(
                     host, user, port,
                     f"docker volume inspect {volume_name} --format '{{{{.Mountpoint}}}}' 2>/dev/null",
                     password=password,
                 )
                 disk_path = stdout.strip() if rc == 0 and stdout.strip() else f"/var/lib/docker/volumes/{volume_name}/_data"
-
-                add_candidate(
-                    disk_path,
-                    "docker_volume",
-                    container_path=container_music_path,
-                    warning="Named Docker volume — lives on the OS disk (microSD), NOT external storage. Use a bind mount instead.",
-                )
+                add_candidate(disk_path, "docker_volume", container_path=container_music_path, mount_type="volume")
             else:
-                # Can't resolve — container path but no mount found
-                add_candidate(
-                    container_music_path,
-                    "docker_env_container",
-                    container_path=container_music_path,
-                    warning="Container path — could not resolve to host path. May not work for file transfer.",
-                )
+                # Can't resolve — bare container path
+                add_candidate(container_music_path, "docker_env_container", container_path=container_music_path)
 
     # --- Step 4: Add bind mounts that look like music directories ---
     for container_path, host_path in bind_map.items():
-        # Skip if we already added this host path from ND_MUSICFOLDER resolution
         if host_path in seen_host_paths:
             continue
-        # Only add mounts that look like music/data paths
         if any(kw in host_path.lower() for kw in ("music", "data", "media")):
-            add_candidate(
-                host_path,
-                "docker_bind",
-                container_path=container_path,
-            )
+            add_candidate(host_path, "docker_bind", container_path=container_path, mount_type="bind")
 
-    # --- Step 5: Named volumes that look like music (with warning) ---
+    # --- Step 5: Named volumes that look like music ---
     for mount in mounts:
         if mount["type"] == "volume" and mount.get("name"):
+            if container_music_path and mount["destination"] == container_music_path:
+                continue  # Already handled in step 3
             name = mount["name"].lower()
             dest = mount["destination"].lower()
-            # Skip if it's the ND_MUSICFOLDER (already handled in step 3)
-            if container_music_path and mount["destination"] == container_music_path:
-                continue
             if any(kw in name for kw in ("music", "data", "media")) or any(kw in dest for kw in ("music", "data", "media")):
                 volume_name = mount.get("name", "")
                 rc, stdout, _ = _ssh_command(
@@ -451,25 +462,19 @@ def probe_remote_paths(
                     password=password,
                 )
                 disk_path = stdout.strip() if rc == 0 and stdout.strip() else f"/var/lib/docker/volumes/{volume_name}/_data"
-
-                add_candidate(
-                    disk_path,
-                    "docker_volume",
-                    container_path=mount["destination"],
-                    warning="Named Docker volume — lives on the OS disk (microSD), NOT external storage.",
-                )
+                add_candidate(disk_path, "docker_volume", container_path=mount["destination"], mount_type="volume")
 
     # --- Step 6: Bare-metal Navidrome config ---
     for config_path in REMOTE_NAVIDROME_CONFIG_PATHS:
         rc, stdout, _ = _ssh_command(host, user, port, f"cat {config_path} 2>/dev/null", password=password)
         if rc == 0 and "MusicFolder" in stdout:
+            navidrome_type = "bare_metal"
             for line in stdout.splitlines():
                 line = line.strip()
                 if line.startswith("MusicFolder") or line.startswith("MusicFolder ="):
                     value = line.split("=", 1)[-1].strip().strip('"').strip("'")
-                    # Check if this is a container path that maps to a bind
                     if value in bind_map:
-                        add_candidate(bind_map[value], "docker_config_resolved", container_path=value)
+                        add_candidate(bind_map[value], "docker_config_resolved", container_path=value, mount_type="bind")
                     else:
                         add_candidate(value, "navidrome_config")
 
@@ -487,7 +492,7 @@ def probe_remote_paths(
         c["path"],
     ))
 
-    return {"music_folder": candidates}
+    return {"music_folder": candidates, "navidrome_type": navidrome_type}
 
 
 def probe_navidrome_connection(url: str, username: str, password: str) -> dict[str, str | bool]:
