@@ -1,0 +1,17 @@
+INFO:     Started server process [605528]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     127.0.0.1:34758 - "GET /api/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33694 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37654 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37662 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58672 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41598 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41600 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57186 - "GET /api/settings/paths/remote HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:56392 - "GET /api/settings/navidrome/test HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:56400 - "GET /api/settings/navidrome/test HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:56412 - "GET /api/settings/navidrome/test HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:56816 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41754 - "GET /api/settings/paths/local HTTP/1.1" 200 OK

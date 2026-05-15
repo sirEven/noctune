@@ -199,10 +199,11 @@
 
 		<div class="space-y-4">
 			<div>
-				<label class="block text-sm font-medium text-text-secondary mb-1">Source Directory</label>
+				<label for="source-dir" class="block text-sm font-medium text-text-secondary mb-1">Source Directory</label>
 				<p class="text-xs text-text-muted mb-2">Local directory Noctune watches for new music files</p>
 				<div class="flex gap-2">
 					<input
+						id="source-dir"
 						type="text"
 						bind:value={sourceDir}
 						placeholder="~/Music/Incoming"
@@ -219,10 +220,11 @@
 			</div>
 
 			<div>
-				<label class="block text-sm font-medium text-text-secondary mb-1">Destination Directory</label>
+				<label for="dest-dir" class="block text-sm font-medium text-text-secondary mb-1">Destination Directory</label>
 				<p class="text-xs text-text-muted mb-2">Remote directory where processed music is transferred</p>
 				<div class="flex gap-2">
 					<input
+						id="dest-dir"
 						type="text"
 						bind:value={destDir}
 						placeholder="/data/music"
@@ -233,7 +235,7 @@
 
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label class="block text-sm font-medium text-text-secondary mb-1">Dest Host</label>
+					<label for="dest-host" class="block text-sm font-medium text-text-secondary mb-1">Dest Host</label>
 					<input
 						type="text"
 						bind:value={destHost}
@@ -242,7 +244,7 @@
 					/>
 				</div>
 				<div>
-					<label class="block text-sm font-medium text-text-secondary mb-1">Dest User</label>
+					<label for="dest-user" class="block text-sm font-medium text-text-secondary mb-1">Dest User</label>
 					<input
 						type="text"
 						bind:value={destUser}
@@ -278,7 +280,7 @@
 
 		<div class="space-y-4">
 			<div>
-				<label class="block text-sm font-medium text-text-secondary mb-1">URL</label>
+				<label for="navidrome-url" class="block text-sm font-medium text-text-secondary mb-1">URL</label>
 				<input
 					type="text"
 					bind:value={navidromeUrl}
@@ -289,7 +291,7 @@
 
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label class="block text-sm font-medium text-text-secondary mb-1">Username</label>
+					<label for="nav-username" class="block text-sm font-medium text-text-secondary mb-1">Username</label>
 					<input
 						type="text"
 						bind:value={navidromeUsername}
@@ -298,7 +300,7 @@
 					/>
 				</div>
 				<div>
-					<label class="block text-sm font-medium text-text-secondary mb-1">Password</label>
+					<label for="nav-password" class="block text-sm font-medium text-text-secondary mb-1">Password</label>
 					<input
 						type="password"
 						bind:value={navidromePassword}
@@ -309,7 +311,7 @@
 			</div>
 
 			<div>
-				<label class="block text-sm font-medium text-text-secondary mb-1">Music Folder (on remote)</label>
+				<label for="music-folder" class="block text-sm font-medium text-text-secondary mb-1">Music Folder (on remote)</label>
 				<p class="text-xs text-text-muted mb-2">Absolute path to music directory on the Pi</p>
 				<div class="flex gap-2">
 					<input
@@ -330,7 +332,7 @@
 
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label class="block text-sm font-medium text-text-secondary mb-1">SSH Host</label>
+					<label for="ssh-host" class="block text-sm font-medium text-text-secondary mb-1">SSH Host</label>
 					<input
 						type="text"
 						bind:value={navidromeSshHost}
@@ -339,7 +341,7 @@
 					/>
 				</div>
 				<div>
-					<label class="block text-sm font-medium text-text-secondary mb-1">SSH Port</label>
+					<label for="ssh-port" class="block text-sm font-medium text-text-secondary mb-1">SSH Port</label>
 					<input
 						type="number"
 						bind:value={navidromeSshPort}
