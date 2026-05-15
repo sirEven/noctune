@@ -43,3 +43,13 @@ confidence_threshold: 0.8
 
 # Seconds to wait after last file event before processing (debounce)
 debounce_seconds: 5.0
+
+# Navidrome integration — enables library browsing and deletion from the UI
+navidrome:
+  url: http://192.168.178.107:4533
+  username: eversin
+  password: ""              # set via env var or config
+  music_folder: /data/music # absolute path on the Pi where music lives
+  ssh_host: 192.168.178.107
+  ssh_user: eversin
+  ssh_port: 22

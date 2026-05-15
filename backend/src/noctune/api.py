@@ -11,6 +11,7 @@ Provides endpoints for:
 - Transfer triggers
 """
 
+import httpx
 import logging
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from noctune.models.track import TagSet
 from noctune.store import StateStore
 from noctune.daemon import DaemonManager
 from noctune.genres import GENRE_VOCABULARY, find_closest_genre, validate_genre
+from noctune.navidrome import NavidromeClient, SubsonicError
 
 logger = logging.getLogger(__name__)
 
@@ -336,3 +338,92 @@ async def validate_genre_endpoint(genre: str) -> dict[str, Any]:
 
     closest = find_closest_genre(genre)
     return {"genre": genre, "valid": False, "closest": closest}
+
+
+# --- Navidrome Library Browsing & Deletion ---
+
+_navidrome_client: NavidromeClient | None = None
+
+
+def _get_navidrome() -> NavidromeClient:
+    """Get the Navidrome client, raising 503 if not configured."""
+    config = get_config()
+    if config.navidrome is None:
+        raise HTTPException(status_code=503, detail="Navidrome not configured")
+    global _navidrome_client
+    if _navidrome_client is None:
+        _navidrome_client = NavidromeClient(config.navidrome)
+    return _navidrome_client
+
+
+@router.get("/library/search")
+async def library_search(query: str, song_count: int = 20, album_count: int = 10) -> dict[str, Any]:
+    """Search the Navidrome library via Subsonic API."""
+    client = _get_navidrome()
+    try:
+        return client.search(query, song_count=song_count, album_count=album_count)
+    except SubsonicError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome error: {e.message}")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome connection error: {e}")
+
+
+@router.get("/library/albums")
+async def library_albums(ltype: str = "alphabeticalByName", offset: int = 0, size: int = 50) -> dict[str, Any]:
+    """List albums from Navidrome."""
+    client = _get_navidrome()
+    try:
+        return client.get_album_list(ltype=ltype, offset=offset, size=size)
+    except SubsonicError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome error: {e.message}")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome connection error: {e}")
+
+
+@router.get("/library/album/{album_id}")
+async def library_album(album_id: str) -> dict[str, Any]:
+    """Get album details + songs from Navidrome."""
+    client = _get_navidrome()
+    try:
+        return client.get_album(album_id)
+    except SubsonicError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome error: {e.message}")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome connection error: {e}")
+
+
+@router.delete("/library/file")
+async def delete_library_file(path: str) -> dict[str, str]:
+    """Delete a file from the remote Navidrome library.
+
+    The path must be the relative path from Navidrome's music folder root.
+    After deletion, triggers a Navidrome rescan.
+    """
+    client = _get_navidrome()
+    try:
+        client.delete_remote_file(path)
+        # Trigger rescan so Navidrome sees the file is gone
+        client.start_scan()
+        return {"status": "deleted", "path": path}
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=f"SSH delete error: {e}")
+    except SubsonicError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome error: {e.message}")
+
+
+@router.delete("/library/directory")
+async def delete_library_directory(path: str) -> dict[str, str]:
+    """Delete an entire directory (e.g. album) from the remote Navidrome library.
+
+    The path must be the relative path from Navidrome's music folder root.
+    After deletion, triggers a Navidrome rescan.
+    """
+    client = _get_navidrome()
+    try:
+        client.delete_remote_directory(path)
+        client.start_scan()
+        return {"status": "deleted", "path": path}
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=f"SSH delete error: {e}")
+    except SubsonicError as e:
+        raise HTTPException(status_code=502, detail=f"Navidrome error: {e.message}")

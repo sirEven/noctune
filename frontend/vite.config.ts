@@ -3,5 +3,11 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()]
+	plugins: [tailwindcss(), sveltekit()],
+	server: {
+		proxy: {
+			'/api': 'http://localhost:8001',
+			'/health': 'http://localhost:8001',
+		}
+	}
 });
