@@ -23,6 +23,14 @@
 			<a href="/normalize" class="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-text-secondary hover:bg-surface-700 hover:text-text-primary transition-colors">
 				<span class="text-base">📂</span> Normalize
 			</a>
+			<a href="/library" class="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-text-secondary hover:bg-surface-700 hover:text-text-primary transition-colors">
+				<span class="text-base">🎵</span> Library
+			</a>
+			<div class="mt-4 pt-3 border-t border-border">
+				<a href="/settings" class="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-text-secondary hover:bg-surface-700 hover:text-text-primary transition-colors">
+					<span class="text-base">⚙️</span> Settings
+				</a>
+			</div>
 		</nav>
 		<div class="p-3 border-t border-border">
 			<p class="text-xs text-text-muted">v0.1.0</p>

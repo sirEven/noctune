@@ -17,15 +17,17 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from noctune.config_loader import load_config
-from noctune.models.config import NoctuneConfig
+from noctune.models.config import NavidromeConfig, NoctuneConfig
 from noctune.models.pipeline import FileState, PipelineStatus
 from noctune.models.track import TagSet
 from noctune.store import StateStore
 from noctune.daemon import DaemonManager
 from noctune.genres import GENRE_VOCABULARY, find_closest_genre, validate_genre
 from noctune.navidrome import NavidromeClient, SubsonicError
+from noctune.path_probe import probe_local_paths, probe_remote_paths, probe_navidrome_connection
 
 logger = logging.getLogger(__name__)
 
@@ -427,3 +429,97 @@ async def delete_library_directory(path: str) -> dict[str, str]:
         raise HTTPException(status_code=502, detail=f"SSH delete error: {e}")
     except SubsonicError as e:
         raise HTTPException(status_code=502, detail=f"Navidrome error: {e.message}")
+
+
+# --- Settings & Path Probing ---
+
+@router.get("/settings/paths/local")
+async def settings_paths_local() -> dict[str, list[dict[str, str | bool]]]:
+    """Probe local filesystem for likely source and destination directories."""
+    return probe_local_paths()
+
+
+@router.get("/settings/paths/remote")
+async def settings_paths_remote() -> dict[str, list[dict[str, str | bool]]]:
+    """Probe the remote Pi for likely Navidrome music folder paths."""
+    config = get_config()
+    if config.navidrome is None:
+        raise HTTPException(status_code=503, detail="Navidrome not configured — set ssh_host in navidrome config")
+    return probe_remote_paths(
+        host=config.navidrome.ssh_host,
+        user=config.navidrome.ssh_user,
+        port=config.navidrome.ssh_port,
+    )
+
+
+@router.get("/settings/navidrome/test")
+async def settings_navidrome_test() -> dict[str, str | bool]:
+    """Test connection to Navidrome — checks reachability and auth."""
+    config = get_config()
+    if config.navidrome is None:
+        raise HTTPException(status_code=503, detail="Navidrome not configured")
+    return probe_navidrome_connection(
+        url=config.navidrome.url,
+        username=config.navidrome.username,
+        password=config.navidrome.password,
+    )
+
+
+class ConfigUpdate(BaseModel):
+    """Partial config update — only provided fields are updated."""
+    source_dir: str | None = None
+    dest_dir: str | None = None
+    dest_host: str | None = None
+    dest_user: str | None = None
+    navidrome_url: str | None = None
+    navidrome_username: str | None = None
+    navidrome_password: str | None = None
+    navidrome_music_folder: str | None = None
+
+
+@router.put("/config")
+async def update_config(update: ConfigUpdate) -> dict[str, Any]:
+    """Update configuration values at runtime.
+
+    Updates are persisted to config file and applied immediately.
+    """
+    import yaml as _yaml
+
+    config = get_config()
+
+    # Apply updates to the in-memory config
+    if update.source_dir is not None:
+        config.source_dir = Path(update.source_dir)
+    if update.dest_dir is not None:
+        config.dest_dir = Path(update.dest_dir)
+    if update.dest_host is not None:
+        config.dest_host = update.dest_host
+    if update.dest_user is not None:
+        config.dest_user = update.dest_user
+    if any([update.navidrome_url, update.navidrome_username,
+            update.navidrome_password, update.navidrome_music_folder]):
+        if config.navidrome is None:
+            config.navidrome = NavidromeConfig()
+        assert config.navidrome is not None  # guaranteed after assignment
+        if update.navidrome_url is not None:
+            config.navidrome.url = update.navidrome_url
+        if update.navidrome_username is not None:
+            config.navidrome.username = update.navidrome_username
+        if update.navidrome_password is not None:
+            config.navidrome.password = update.navidrome_password
+        if update.navidrome_music_folder is not None:
+            config.navidrome.music_folder = update.navidrome_music_folder
+        # Reset cached client so next request uses new config
+        global _navidrome_client
+        if _navidrome_client is not None:
+            _navidrome_client.close()
+            _navidrome_client = None
+
+    # Persist to config file
+    config_path = Path("~/.noctune/config.yaml").expanduser()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_data = config.model_dump(mode="json")
+    with open(config_path, "w") as f:
+        _yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+
+    return config.model_dump(mode="json")
