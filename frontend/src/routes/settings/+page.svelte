@@ -352,50 +352,13 @@
 				</div>
 			{/if}
 
-			<!-- Remote path suggestions -->
-			{#if remotePaths}
-				{#if remotePaths.error}
-					<div class="p-3 bg-error/10 border border-error/30 rounded-md text-error text-xs">
-						{remotePaths.error}
-					</div>
-				{:else if remotePaths.music_folder?.length > 0}
-					<div>
-						<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
-						<div class="space-y-1">
-							{#each remotePaths.music_folder as candidate}
-								<button
-									class="w-full text-left px-3 py-1.5 rounded text-xs transition-colors {candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
-									onclick={() => {
-										if (candidate.exists) {
-											navidromeMusicFolder = candidate.path;
-											destDir = candidate.path;
-										}
-									}}
-									disabled={!candidate.exists}
-								>
-									{candidate.path} {candidate.exists ? '✓' : '✗'}
-									<span class="text-text-muted">({candidate.source})</span>
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/if}
-			{/if}
-
-			<div class="flex gap-3">
+			<div>
 				<button
 					class="px-4 py-2 bg-surface-700 hover:bg-surface-600 border border-border text-text-secondary rounded-md text-sm transition-colors disabled:opacity-50"
 					onclick={testSsh}
 					disabled={testingSsh}
 				>
 					{testingSsh ? 'Testing...' : 'Test SSH'}
-				</button>
-				<button
-					class="px-4 py-2 bg-surface-700 hover:bg-surface-600 border border-border text-text-secondary rounded-md text-sm transition-colors disabled:opacity-50"
-					onclick={probeRemote}
-					disabled={probingRemote}
-				>
-					{probingRemote ? 'Probing...' : '🔍 Probe Remote'}
 				</button>
 			</div>
 		</div>
@@ -443,15 +406,54 @@
 
 			<div>
 				<label for="music-folder" class="block text-sm font-medium text-text-secondary mb-1">Music Folder</label>
-				<p class="text-xs text-text-muted mb-1">Navidrome's MusicFolder — where it indexes from. Usually the same as Destination Directory.</p>
-				<input
-					id="music-folder"
-					type="text"
-					bind:value={navidromeMusicFolder}
-					placeholder="/data/music"
-					class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
-				/>
+				<p class="text-xs text-text-muted mb-1">Where Navidrome looks for music on the remote machine. Usually the same as Destination Directory.</p>
+				<div class="flex gap-2">
+					<input
+						id="music-folder"
+						type="text"
+						bind:value={navidromeMusicFolder}
+						placeholder="/data/music"
+						class="flex-1 px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
+					/>
+					<button
+						class="px-3 py-2 bg-surface-700 hover:bg-surface-600 border border-border text-text-secondary rounded-md text-xs transition-colors disabled:opacity-50 shrink-0"
+						onclick={probeRemote}
+						disabled={probingRemote}
+					>
+						{probingRemote ? '...' : '🔍 Probe'}
+					</button>
+				</div>
 			</div>
+
+			<!-- Remote path suggestions (from probing) -->
+			{#if remotePaths}
+				{#if remotePaths.error}
+					<div class="p-3 bg-error/10 border border-error/30 rounded-md text-error text-xs">
+						{remotePaths.error}
+					</div>
+				{:else if remotePaths.music_folder?.length > 0}
+					<div>
+						<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
+						<div class="space-y-1">
+							{#each remotePaths.music_folder as candidate}
+								<button
+									class="w-full text-left px-3 py-1.5 rounded text-xs transition-colors {candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
+									onclick={() => {
+										if (candidate.exists) {
+											navidromeMusicFolder = candidate.path;
+											destDir = candidate.path;
+										}
+									}}
+									disabled={!candidate.exists}
+								>
+									{candidate.path} {candidate.exists ? '✓' : '✗'}
+									<span class="text-text-muted">({candidate.source})</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			{/if}
 
 			<!-- Navidrome test result -->
 			{#if navidromeTest}
