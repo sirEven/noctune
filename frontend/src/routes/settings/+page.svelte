@@ -14,14 +14,22 @@
 		exists: boolean;
 		source: string;
 		label: string;
-		recommended: boolean;
-		warning: string | null;
+		navidrome_uses: boolean;
 		mount_type: string | null;
 		device: string | null;
 		mount_point: string | null;
 		fstype: string | null;
 		size: string | null;
 		used_pct: string | null;
+		on_root: boolean;
+	}
+
+	interface MountInfo {
+		device: string;
+		mount_point: string;
+		fstype: string;
+		size: string;
+		used_pct: string;
 		on_root: boolean;
 	}
 
@@ -60,7 +68,7 @@
 
 	let config = $state<Config | null>(null);
 	let localPaths = $state<{ source: PathCandidate[]; dest: PathCandidate[] } | null>(null);
-	let remotePaths = $state<{ music_folder: MusicCandidate[]; navidrome_type?: string; error?: string } | null>(null);
+	let remotePaths = $state<{ music_folder: MusicCandidate[]; mounts: MountInfo[]; navidrome_type?: string; error?: string } | null>(null);
 	let navidromeTest = $state<NavidromeTest | null>(null);
 	let sshTest = $state<SshTest | null>(null);
 	let saving = $state(false);
@@ -445,28 +453,28 @@
 				{:else if remotePaths.music_folder?.length > 0}
 					<div>
 						{#if remotePaths.navidrome_type === 'docker'}
-							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Navidrome runs in Docker — host paths shown</p>
+							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Navidrome runs in Docker — host paths shown</p>
 						{:else if remotePaths.navidrome_type === 'bare_metal'}
-							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Navidrome runs bare-metal on this machine</p>
+							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Navidrome runs bare-metal on this machine</p>
 						{:else}
-							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Found on remote</p>
+							<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
 						{/if}
 						<div class="space-y-2">
 							{#each remotePaths.music_folder as candidate}
 								<button
-									class="w-full text-left px-3 py-2.5 rounded text-xs transition-colors {candidate.recommended ? 'bg-primary/15 border border-primary/40 text-text-primary' : candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}  {!candidate.exists && !candidate.recommended ? 'opacity-60' : ''}"
+									class="w-full text-left px-3 py-2.5 rounded text-xs transition-colors {candidate.navidrome_uses ? 'bg-primary/15 border border-primary/40 text-text-primary' : candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}  {!candidate.exists && !candidate.navidrome_uses ? 'opacity-60' : ''}"
 									onclick={() => {
-										if (candidate.exists || candidate.recommended) {
+										if (candidate.exists || candidate.navidrome_uses) {
 											navidromeMusicFolder = candidate.path;
 											destDir = candidate.path;
 										}
 									}}
-									disabled={!candidate.exists && !candidate.recommended}
+									disabled={!candidate.exists && !candidate.navidrome_uses}
 								>
 									<!-- Top line: badge + path + container mapping -->
 									<div class="flex items-center gap-2 flex-wrap">
-										{#if candidate.recommended}
-											<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary text-white leading-none shrink-0">RECOMMENDED</span>
+										{#if candidate.navidrome_uses}
+											<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-600 text-white leading-none shrink-0">NAVIDROME</span>
 										{/if}
 										<span class="font-medium font-mono">{candidate.path}</span>
 										{#if !candidate.exists}
@@ -510,6 +518,28 @@
 				{:else if !remotePaths.error}
 					<p class="text-xs text-text-muted">No music paths found on remote</p>
 				{/if}
+			{/if}
+
+			<!-- Available storage mounts on remote -->
+			{#if remotePaths?.mounts && remotePaths.mounts.length > 0}
+				<div>
+					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Available storage on remote</p>
+					<div class="space-y-1">
+						{#each remotePaths.mounts as mount}
+							<div class="flex items-center gap-2 px-3 py-1.5 rounded text-xs bg-surface-700/50">
+								<span class="font-mono text-text-secondary">{mount.device}</span>
+								<span class="text-text-muted">→</span>
+								<span class="font-mono text-text-primary">{mount.mount_point}</span>
+								<span class="text-text-muted">{mount.fstype}</span>
+								<span class="text-text-muted">{mount.size}</span>
+								<span class="text-text-muted">{mount.used_pct}% used</span>
+								{#if mount.on_root}
+									<span class="px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-400 text-[10px] border border-amber-600/30">OS disk</span>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
 			{/if}
 
 			<!-- Navidrome test result -->

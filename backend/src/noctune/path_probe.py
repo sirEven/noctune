@@ -22,7 +22,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 # --- Local path suggestions ---
 
 LOCAL_SOURCE_CANDIDATES = [
@@ -193,6 +192,149 @@ def _get_filesystem_info(
     }
 
 
+def _get_mounts(
+    host: str, user: str, port: int, password: str = "",
+) -> list[dict[str, str]]:
+    """Discover all real storage mounts on the remote machine.
+
+    Filters out virtual/pseudo filesystems (tmpfs, devtmpfs, proc, sysfs, etc.)
+    and uninteresting mounts (/boot, /efi, snap, docker overlay).
+
+    Returns a list of dicts with keys:
+      device, mount_point, fstype, size, used_pct, on_root
+    """
+    # Findmnt gives clean mount info; fallback to parsing /proc/mounts + df
+    # Try findmnt first (most Linux systems have it)
+    rc, stdout, _ = _ssh_command(
+        host, user, port,
+        "findmnt -J -o SOURCE,TARGET,FSTYPE,SIZE,USE% 2>/dev/null",
+        password=password,
+    )
+    if rc == 0 and stdout.strip():
+        try:
+            return _parse_findmnt(stdout)
+        except (json.JSONDecodeError, KeyError):
+            pass  # Fall through to df approach
+
+    # Fallback: parse df output with --output for consistent column order
+    rc, stdout, _ = _ssh_command(
+        host, user, port,
+        "df -h --output=source,target,fstype,size,pcent 2>/dev/null",
+        password=password,
+    )
+    if rc != 0 or not stdout.strip():
+        return []
+
+    return _parse_df_output(stdout)
+
+
+# Filesystems that are virtual/pseudo — not real storage
+SKIP_FSTYPES = {
+    "tmpfs", "devtmpfs", "devfs", "proc", "sysfs", "cgroup", "cgroup2",
+    "cpuset", "debugfs", "tracefs", "securityfs", "fusectl", "configfs",
+    "pstore", "efivarfs", "bpf", "mqueue", "hugetlbfs", "ramfs",
+    "overlay", "squashfs", "iso9660",
+}
+
+# Mount points that are not user-applicable storage
+SKIP_MOUNT_PATTERNS = (
+    "/boot", "/efi", "/snap/", "/tmp", "/run/", "/dev/", "/proc/",
+    "/sys/", "/var/lib/docker/", "/var/snap/",
+)
+
+
+def _parse_findmnt(json_str: str) -> list[dict[str, str]]:
+    """Parse findmnt JSON output into mount dicts."""
+    data = json.loads(json_str)
+    mounts = []
+    for fs_entry in data.get("filesystems", []):
+        mount = _clean_mount_entry(
+            device=fs_entry.get("source", ""),
+            mount_point=fs_entry.get("target", ""),
+            fstype=fs_entry.get("fstype", ""),
+            size=fs_entry.get("size", ""),
+            used_pct=_strip_pct(fs_entry.get("use%", "")),
+        )
+        if mount:
+            mounts.append(mount)
+        # Handle children (submounts)
+        for child in fs_entry.get("children", []):
+            mount = _clean_mount_entry(
+                device=child.get("source", ""),
+                mount_point=child.get("target", ""),
+                fstype=child.get("fstype", ""),
+                size=child.get("size", ""),
+                used_pct=_strip_pct(child.get("use%", "")),
+            )
+            if mount:
+                mounts.append(mount)
+    return mounts
+
+
+def _strip_pct(val: str | None) -> str:
+    """Strip trailing % from a percentage string."""
+    if not val:
+        return ""
+    return str(val).rstrip("%")
+
+
+def _parse_df_output(df_str: str) -> list[dict[str, str]]:
+    """Parse df -h --output output into mount dicts.
+
+    Expected format (with --output=source,target,fstype,size,pcent):
+      Filesystem Mounted on Type Size Use%
+      /dev/mmcblk0p2 / ext4 15G 36%
+    """
+    mounts = []
+    lines = df_str.strip().splitlines()
+
+    for line in lines[1:]:  # Skip header
+        fields = line.split()
+        if len(fields) < 5:
+            continue
+
+        device = fields[0]       # Filesystem (source)
+        mount_point = fields[1]  # Mounted on (target)
+        fstype = fields[2]       # Type (fstype)
+        size = fields[3]         # Size
+        used_pct = fields[4].rstrip("%")  # Use%
+
+        mount = _clean_mount_entry(device, mount_point, fstype, size, used_pct)
+        if mount:
+            mounts.append(mount)
+
+    return mounts
+
+
+def _clean_mount_entry(
+    device: str, mount_point: str, fstype: str, size: str, used_pct: str,
+) -> dict[str, str] | None:
+    """Filter and clean a mount entry. Returns None if it should be skipped."""
+    # Skip virtual filesystems
+    if fstype in SKIP_FSTYPES:
+        return None
+    # Skip loop devices (snap, docker layers)
+    if device.startswith("/dev/loop"):
+        return None
+    # Skip uninteresting mount points
+    for pattern in SKIP_MOUNT_PATTERNS:
+        if mount_point.startswith(pattern):
+            return None
+    # Must be a real block device or network mount
+    if not device.startswith("/dev/") and not device.startswith("//") and ":" not in device:
+        return None
+
+    on_root = mount_point == "/"
+    return {
+        "device": device,
+        "mount_point": mount_point,
+        "fstype": fstype,
+        "size": size,
+        "used_pct": used_pct.rstrip("%") if used_pct else "",
+        "on_root": on_root,
+    }
+
+
 def _docker_inspect_mounts(
     host: str, user: str, port: int, container_id: str, password: str = "",
 ) -> list[dict]:
@@ -296,6 +438,9 @@ def probe_remote_paths(
     - Device and filesystem info (which disk, how big, how full)
     - Whether the path is on the root device or a separate mount
 
+    Also discovers all real storage mounts on the remote machine so the user
+    can see at a glance what disks are available.
+
     No judgments — the user decides what's right for their setup.
 
     Returns:
@@ -303,19 +448,30 @@ def probe_remote_paths(
         "navidrome_type": "docker" | "bare_metal" | "not_found",
         "music_folder": [
           {
-            "path": "/data/music",           # host path (what Noctune uses for rsync/SSH)
+            "path": "/data/music",           # host path
             "container_path": "/music",       # what Navidrome sees (None if bare-metal)
             "source": "docker_env_resolved",  # how we found it
             "label": "...",                   # human-readable explanation
-            "recommended": True,             # best guess based on source authority
+            "navidrome_uses": True,           # True if this is what Navidrome currently uses
             "exists": True,
-            "device": "/dev/sda1",           # filesystem device
-            "mount_point": "/data",           # mount point
-            "fstype": "ext4",                 # filesystem type
-            "size": "234G",                   # total size
-            "used_pct": "45",                 # used percentage
-            "on_root": False,                 # True if on root device (typically OS disk)
-            "mount_type": "bind",            # "bind" | "volume" | None
+            "device": "/dev/sda1",
+            "mount_point": "/data",
+            "fstype": "ext4",
+            "size": "234G",
+            "used_pct": "45",
+            "on_root": False,
+            "mount_type": "bind",
+          },
+          ...
+        ],
+        "mounts": [
+          {
+            "device": "/dev/sda1",
+            "mount_point": "/data",
+            "fstype": "ext4",
+            "size": "234G",
+            "used_pct": "0",
+            "on_root": False,
           },
           ...
         ],
@@ -324,12 +480,11 @@ def probe_remote_paths(
     """
     ssh_ok, ssh_msg = _ssh_available(host, user, port, password)
     if not ssh_ok:
-        return {"music_folder": [], "navidrome_type": "unknown", "error": ssh_msg}
+        return {"music_folder": [], "mounts": [], "navidrome_type": "unknown", "error": ssh_msg}
 
     navidrome_type = "not_found"
     candidates: list[dict] = []
     seen_host_paths: set[str] = set()
-    best_priority = 99
 
     PRIORITY = {
         "docker_env_resolved": 0,
@@ -350,8 +505,11 @@ def probe_remote_paths(
         "docker_config_container": "Navidrome config (MusicFolder) — container path, host path unknown",
         "docker_volume": "Docker named volume — managed by Docker",
         "navidrome_config": "Navidrome config file MusicFolder setting",
-        "common_path": "Path exists on disk — not verified as Navidrome's",
+        "common_path": "Common path — not verified as Navidrome's",
     }
+
+    # The path Navidrome actually uses (host path) — for marking navidrome_uses=True
+    navidrome_host_path: str | None = None
 
     def add_candidate(
         host_path: str,
@@ -359,25 +517,22 @@ def probe_remote_paths(
         container_path: str | None = None,
         mount_type: str | None = None,
         exists: bool = True,
+        is_navidrome_path: bool = False,
     ) -> None:
         """Add a candidate path with device/filesystem context."""
-        nonlocal best_priority
         if host_path in seen_host_paths:
             for c in candidates:
                 if c["path"] == host_path:
+                    # Upgrade source priority if better
                     if PRIORITY.get(source, 99) < PRIORITY.get(c["source"], 99):
                         c["source"] = source
                         c["label"] = LABELS.get(source, source)
                         c["container_path"] = container_path or c.get("container_path")
                         c["mount_type"] = mount_type or c.get("mount_type")
+                    if is_navidrome_path:
+                        c["navidrome_uses"] = True
                     return
         seen_host_paths.add(host_path)
-
-        is_recommended = PRIORITY.get(source, 99) < best_priority
-        if is_recommended:
-            for c in candidates:
-                c["recommended"] = False
-            best_priority = PRIORITY.get(source, 99)
 
         # Gather device/filesystem context
         fs_info = {}
@@ -390,7 +545,7 @@ def probe_remote_paths(
             "exists": exists,
             "source": source,
             "label": LABELS.get(source, source),
-            "recommended": is_recommended,
+            "navidrome_uses": is_navidrome_path,
             "mount_type": mount_type,
             **fs_info,  # device, mount_point, fstype, size, used_pct, on_root
         })
@@ -424,7 +579,8 @@ def probe_remote_paths(
     if container_music_path:
         if container_music_path in bind_map:
             host_path = bind_map[container_music_path]
-            add_candidate(host_path, "docker_env_resolved", container_path=container_music_path, mount_type="bind")
+            navidrome_host_path = host_path
+            add_candidate(host_path, "docker_env_resolved", container_path=container_music_path, mount_type="bind", is_navidrome_path=True)
         else:
             # Check if it's a named volume
             volume_mount = None
@@ -434,7 +590,6 @@ def probe_remote_paths(
                     break
 
             if volume_mount:
-                # Named volume — find the real disk path
                 volume_name = volume_mount.get("name", "")
                 rc, stdout, _ = _ssh_command(
                     host, user, port,
@@ -442,10 +597,12 @@ def probe_remote_paths(
                     password=password,
                 )
                 disk_path = stdout.strip() if rc == 0 and stdout.strip() else f"/var/lib/docker/volumes/{volume_name}/_data"
-                add_candidate(disk_path, "docker_volume", container_path=container_music_path, mount_type="volume")
+                navidrome_host_path = disk_path
+                add_candidate(disk_path, "docker_volume", container_path=container_music_path, mount_type="volume", is_navidrome_path=True)
             else:
                 # Can't resolve — bare container path
-                add_candidate(container_music_path, "docker_env_container", container_path=container_music_path)
+                navidrome_host_path = container_music_path
+                add_candidate(container_music_path, "docker_env_container", container_path=container_music_path, is_navidrome_path=True)
 
     # --- Step 4: Add bind mounts that look like music directories ---
     for container_path, host_path in bind_map.items():
@@ -481,9 +638,11 @@ def probe_remote_paths(
                 if line.startswith("MusicFolder") or line.startswith("MusicFolder ="):
                     value = line.split("=", 1)[-1].strip().strip('"').strip("'")
                     if value in bind_map:
-                        add_candidate(bind_map[value], "docker_config_resolved", container_path=value, mount_type="bind")
+                        navidrome_host_path = bind_map[value]
+                        add_candidate(bind_map[value], "docker_config_resolved", container_path=value, mount_type="bind", is_navidrome_path=True)
                     else:
-                        add_candidate(value, "navidrome_config")
+                        navidrome_host_path = value
+                        add_candidate(value, "navidrome_config", is_navidrome_path=True)
 
     # --- Step 7: Common paths as fallback ---
     for path in REMOTE_MUSIC_CANDIDATES:
@@ -492,14 +651,22 @@ def probe_remote_paths(
         rc, _, _ = _ssh_command(host, user, port, f"test -d {path} && echo yes", password=password)
         add_candidate(path, "common_path", exists=rc == 0)
 
-    # Sort: recommended first, then by priority, then alphabetically
+    # Sort: navidrome_uses first, then by priority, then alphabetically
     candidates.sort(key=lambda c: (
-        not c.get("recommended", False),
+        not c.get("navidrome_uses", False),
         PRIORITY.get(c["source"], 99),
         c["path"],
     ))
 
-    return {"music_folder": candidates, "navidrome_type": navidrome_type}
+    # --- Discover all real storage mounts ---
+    storage_mounts = _get_mounts(host, user, port, password)
+
+    return {
+        "music_folder": candidates,
+        "mounts": storage_mounts,
+        "navidrome_type": navidrome_type,
+        "navidrome_host_path": navidrome_host_path,
+    }
 
 
 def probe_navidrome_connection(url: str, username: str, password: str) -> dict[str, str | bool]:
