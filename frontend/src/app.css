@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* Noctune Design Tokens — from DESIGN.md */
+
+@theme {
+  /* Surfaces */
+  --color-surface-900: #0C0C14;
+  --color-surface-800: #14141E;
+  --color-surface-700: #1C1C28;
+  --color-surface-600: #2D2D3F;
+
+  /* Primary / Accent */
+  --color-primary: #6C5CE7;
+  --color-primary-hover: #8B7CF7;
+  --color-primary-muted: rgba(108, 92, 231, 0.15);
+
+  /* Semantic */
+  --color-success: #34D399;
+  --color-warning: #F59E0B;
+  --color-error: #F87171;
+
+  /* Text */
+  --color-text-primary: #F0F0F5;
+  --color-text-secondary: #9CA3AF;
+  --color-text-muted: #6B7280;
+
+  /* Borders */
+  --color-border: #2D2D3F;
+  --color-border-active: #6C5CE7;
+
+  /* Fonts */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* Base styles */
+body {
+  background-color: var(--color-surface-900);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+/* Custom badge styles per DESIGN.md */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+
+.badge-success {
+  background-color: rgba(52, 211, 153, 0.15);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+}
+
+.badge-error {
+  background-color: rgba(248, 113, 113, 0.15);
+  color: var(--color-error);
+}
+
+.badge-confidence {
+  background-color: var(--color-primary-muted);
+  color: var(--color-primary-hover);
+}
+
+/* Left-border card for review items */
+.card-border-left {
+  border-left: 3px solid var(--color-primary);
+  background-color: var(--color-surface-800);
+  padding: 1rem;
+  border-radius: 0.25rem;
+}
+
+.card-border-left-success {
+  border-left-color: var(--color-success);
+}
+
+.card-border-left-warning {
+  border-left-color: var(--color-warning);
+}
+
+.card-border-left-error {
+  border-left-color: var(--color-error);
+}
+
+/* Monospace for technical data */
+.mono {
+  font-family: var(--font-mono);
+}
