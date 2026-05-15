@@ -241,14 +241,14 @@
 	<!-- Remote / Navidrome Connection -->
 	<div class="card-border-left mb-6">
 		<h3 class="text-lg font-medium text-text-primary mb-3">Navidrome Connection</h3>
-		<p class="text-xs text-text-muted mb-4">How Noctune connects to Navidrome on your Pi</p>
+		<p class="text-xs text-text-muted mb-4">How Noctune connects to Navidrome on the remote machine</p>
 
 		<div class="space-y-4">
 			<!-- Remote Host & User -->
 			<div class="grid grid-cols-2 gap-4">
 				<div>
 					<label for="remote-host" class="block text-sm font-medium text-text-secondary mb-1">Remote Host</label>
-					<p class="text-xs text-text-muted mb-1">IP or hostname of the Pi</p>
+					<p class="text-xs text-text-muted mb-1">Hostname or IP of the remote machine</p>
 					<input
 						id="remote-host"
 						type="text"
@@ -259,7 +259,7 @@
 				</div>
 				<div>
 					<label for="remote-user" class="block text-sm font-medium text-text-secondary mb-1">Remote User</label>
-					<p class="text-xs text-text-muted mb-1">SSH username on the Pi</p>
+					<p class="text-xs text-text-muted mb-1">SSH username on the remote machine</p>
 					<input
 						id="remote-user"
 						type="text"
@@ -308,7 +308,7 @@
 			<!-- Destination Directory (on remote) -->
 			<div>
 				<label for="dest-dir" class="block text-sm font-medium text-text-secondary mb-1">Destination Directory (on remote)</label>
-				<p class="text-xs text-text-muted mb-2">Path on the Pi where processed music lands</p>
+				<p class="text-xs text-text-muted mb-2">Path on the remote machine where processed music lands</p>
 				<input
 					id="dest-dir"
 					type="text"
@@ -335,7 +335,7 @@
 						onclick={probeRemote}
 						disabled={probingRemote}
 					>
-						{probingRemote ? '...' : '🔍 Probe Pi'}
+						{probingRemote ? '...' : '🔍 Probe Remote'}
 					</button>
 				</div>
 			</div>
@@ -343,7 +343,7 @@
 			<!-- Remote path suggestions -->
 			{#if remotePaths}
 				<div>
-					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on the Pi</p>
+					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
 					<div class="space-y-1">
 						{#each remotePaths.music_folder as candidate}
 							<button

@@ -16,3 +16,11 @@ INFO:     127.0.0.1:56412 - "GET /api/settings/navidrome/test HTTP/1.1" 503 Serv
 INFO:     127.0.0.1:56816 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
 INFO:     127.0.0.1:41754 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
 INFO:     127.0.0.1:50924 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39836 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38536 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33046 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33048 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36146 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36148 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58104 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58110 - "GET /api/config HTTP/1.1" 200 OK

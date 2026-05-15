@@ -1,6 +1,6 @@
 """Path probing — suggest likely source and destination directories.
 
-Probes the local filesystem and remote (Pi) filesystem to suggest
+Probes the local filesystem and remote filesystem to suggest
 likely source_dir, dest_dir, and Navidrome music folder paths.
 
 No LLM needed — just filesystem checks and reading Navidrome's config.
@@ -92,7 +92,7 @@ def _ssh_command(host: str, user: str, port: int, command: str, timeout: int = 1
 
 
 def probe_remote_paths(host: str, user: str, port: int = 22) -> dict[str, list[dict[str, str | bool]]]:
-    """Probe the remote Pi for likely Navidrome music folder and config.
+    """Probe the remote machine for likely Navidrome music folder and config.
 
     Checks:
     1. Common music directory paths for existence
