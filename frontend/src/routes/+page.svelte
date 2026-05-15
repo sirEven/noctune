@@ -13,9 +13,13 @@
 		failed: number;
 	}
 
+	type DaemonState = 'stopped' | 'running' | 'paused';
+
 	let status: StatusCounts | null = $state(null);
 	let loading = $state(true);
 	let error: string | null = $state(null);
+	let daemonState: DaemonState | null = $state(null);
+	let daemonLoading = $state(false);
 
 	async function fetchStatus() {
 		try {
@@ -29,13 +33,105 @@
 		}
 	}
 
-	onMount(fetchStatus);
+	async function fetchDaemonStatus() {
+		try {
+			const res = await fetch('/api/daemon/status');
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+			daemonState = data.state;
+		} catch {
+			// Daemon might not be initialized yet
+		}
+	}
+
+	async function toggleDaemon() {
+		daemonLoading = true;
+		try {
+			let endpoint: string;
+			if (daemonState === 'stopped') {
+				endpoint = '/api/daemon/start';
+			} else if (daemonState === 'paused') {
+				endpoint = '/api/daemon/resume';
+			} else {
+				endpoint = '/api/daemon/pause';
+			}
+			const res = await fetch(endpoint, { method: 'POST' });
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+			daemonState = data.status as DaemonState;
+		} catch (e) {
+			console.error('Daemon toggle failed:', e);
+		} finally {
+			daemonLoading = false;
+		}
+	}
+
+	async function stopDaemon() {
+		daemonLoading = true;
+		try {
+			const res = await fetch('/api/daemon/stop', { method: 'POST' });
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+			daemonState = data.status as DaemonState;
+		} catch (e) {
+			console.error('Daemon stop failed:', e);
+		} finally {
+			daemonLoading = false;
+		}
+	}
+
+	onMount(() => {
+		fetchStatus();
+		fetchDaemonStatus();
+	});
 </script>
 
 <div class="p-6">
 	<div class="mb-6">
 		<h2 class="text-2xl font-semibold text-text-primary">Pipeline Status</h2>
 		<p class="text-sm text-text-secondary mt-1">Overview of your music library processing pipeline</p>
+	</div>
+
+	<!-- Daemon Control -->
+	<div class="card-border-left mb-6" class:card-border-left-success={daemonState === 'running'} class:card-border-left-warning={daemonState === 'paused'}>
+		<div class="flex items-center justify-between">
+			<div>
+				<p class="text-xs text-text-muted uppercase tracking-wider">Daemon</p>
+				<p class="text-lg font-semibold text-text-primary mt-0.5">
+					{#if daemonState === 'running'}
+						🟢 Running
+					{:else if daemonState === 'paused'}
+						🟡 Paused
+					{:else}
+						🔴 Stopped
+					{/if}
+				</p>
+			</div>
+			<div class="flex gap-2">
+				<button
+					class="px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 {daemonState === 'stopped' ? 'bg-primary text-white hover:bg-primary-hover' : daemonState === 'running' ? 'bg-warning text-surface-900 hover:bg-yellow-600' : 'bg-success text-white hover:bg-emerald-600'}"
+					onclick={toggleDaemon}
+					disabled={daemonLoading}
+				>
+					{#if daemonState === 'running'}
+						⏸ Pause
+					{:else if daemonState === 'paused'}
+						▶ Resume
+					{:else}
+						▶ Start
+					{/if}
+				</button>
+				{#if daemonState !== 'stopped'}
+					<button
+						class="px-3 py-2 bg-surface-700 hover:bg-surface-600 text-error rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+						onclick={stopDaemon}
+						disabled={daemonLoading}
+					>
+						⏹ Stop
+					</button>
+				{/if}
+			</div>
+		</div>
 	</div>
 
 	{#if loading}
@@ -67,13 +163,8 @@
 			<h3 class="text-lg font-medium text-text-primary mb-3">Actions</h3>
 			<div class="flex gap-3">
 				<button
-					class="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-md text-sm font-medium transition-colors"
-					onclick={() => fetch('/api/pipeline/start', { method: 'POST' }).then(() => fetchStatus())}
-				>
-					▶ Start Pipeline
-				</button>
-				<button
 					class="px-4 py-2 bg-surface-700 hover:bg-surface-600 text-text-primary rounded-md text-sm font-medium border border-border transition-colors"
+					onclick={() => { fetchStatus(); fetchDaemonStatus(); }}
 				>
 					↻ Refresh
 				</button>

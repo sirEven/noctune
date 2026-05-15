@@ -22,12 +22,14 @@ from noctune.models.config import NoctuneConfig
 from noctune.models.pipeline import FileState, PipelineStatus
 from noctune.models.track import TagSet
 from noctune.store import StateStore
+from noctune.daemon import DaemonManager
 
 logger = logging.getLogger(__name__)
 
 # Module-level state — set by set_store() at startup
 _store: StateStore | None = None
 _config: NoctuneConfig | None = None
+_daemon: DaemonManager | None = None
 
 router = APIRouter(prefix="/api")
 
@@ -42,6 +44,12 @@ def set_config(config: NoctuneConfig) -> None:
     """Set the config (called at app startup or in tests)."""
     global _config
     _config = config
+
+
+def set_daemon(daemon: DaemonManager) -> None:
+    """Set the daemon manager (called at app startup or in tests)."""
+    global _daemon
+    _daemon = daemon
 
 
 def get_store() -> StateStore:
@@ -130,23 +138,55 @@ async def add_files(paths: list[str]) -> list[dict[str, Any]]:
     return results
 
 
-# --- Pipeline Control ---
+# --- Daemon Control ---
 
-@router.post("/pipeline/start")
-async def start_pipeline() -> dict[str, str]:
-    """Start processing all DISCOVERED files through the pipeline.
+@router.post("/daemon/start")
+async def start_daemon() -> dict[str, str]:
+    """Start the background daemon — begins processing discovered files."""
+    daemon = _daemon
+    if daemon is None:
+        raise HTTPException(status_code=503, detail="Daemon not initialized")
+    await daemon.start()
+    return {"status": daemon.state.value, "message": "Daemon started"}
 
-    This triggers background processing. Returns immediately.
-    """
-    # TODO: Implement background task processing
-    return {"status": "started", "message": "Pipeline processing started"}
+
+@router.post("/daemon/stop")
+async def stop_daemon() -> dict[str, str]:
+    """Stop the background daemon completely."""
+    daemon = _daemon
+    if daemon is None:
+        raise HTTPException(status_code=503, detail="Daemon not initialized")
+    await daemon.stop()
+    return {"status": daemon.state.value, "message": "Daemon stopped"}
 
 
-@router.post("/pipeline/stop")
-async def stop_pipeline() -> dict[str, str]:
-    """Stop any running pipeline processing."""
-    # TODO: Implement background task cancellation
-    return {"status": "stopped", "message": "Pipeline processing stopped"}
+@router.post("/daemon/pause")
+async def pause_daemon() -> dict[str, str]:
+    """Pause the daemon — files queue up but aren't processed."""
+    daemon = _daemon
+    if daemon is None:
+        raise HTTPException(status_code=503, detail="Daemon not initialized")
+    await daemon.pause()
+    return {"status": daemon.state.value, "message": "Daemon paused"}
+
+
+@router.post("/daemon/resume")
+async def resume_daemon() -> dict[str, str]:
+    """Resume the daemon from paused state."""
+    daemon = _daemon
+    if daemon is None:
+        raise HTTPException(status_code=503, detail="Daemon not initialized")
+    await daemon.resume()
+    return {"status": daemon.state.value, "message": "Daemon resumed"}
+
+
+@router.get("/daemon/status")
+async def daemon_status() -> dict[str, str]:
+    """Get the current daemon state."""
+    daemon = _daemon
+    if daemon is None:
+        raise HTTPException(status_code=503, detail="Daemon not initialized")
+    return {"state": daemon.state.value}
 
 
 # --- Review Queue ---
