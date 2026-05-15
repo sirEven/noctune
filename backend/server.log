@@ -44,3 +44,9 @@ INFO:     127.0.0.1:55684 - "GET /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:55700 - "GET /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53380 - "PUT /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53388 - "GET /api/settings/navidrome/test HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48176 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53836 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [605528]

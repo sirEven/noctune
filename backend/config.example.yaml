@@ -5,9 +5,15 @@
 source_dir: ~/Music/Incoming
 
 # Remote destination (your Navidrome server)
-dest_host: 192.168.178.107
-dest_user: eversin
 dest_dir: /data/music
+
+# SSH connection to the remote machine running Navidrome
+# Used for rsync transfers and remote file deletion
+remote:
+  host: 192.168.178.107
+  port: 22
+  user: eversin
+  password: ""   # empty = key-based auth only
 
 # File types to process
 valid_extensions:
@@ -50,7 +56,3 @@ navidrome:
   username: eversin
   password: ""              # set via env var or config
   music_folder: /data/music # absolute path on the remote machine where music lives
-  ssh_host: 192.168.178.107
-  ssh_user: eversin
-  ssh_password: ""         # empty = key-based auth only
-  ssh_port: 22

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from noctune.navidrome import NavidromeClient, SubsonicError
-from noctune.models.config import NavidromeConfig
+from noctune.models.config import NavidromeConfig, RemoteConfig
 
 
 @pytest.fixture
@@ -17,16 +17,24 @@ def nav_config() -> NavidromeConfig:
         username="testuser",
         password="testpass",
         music_folder="/data/music",
-        ssh_host="192.168.1.100",
-        ssh_user="testuser",
-        ssh_port=22,
     )
 
 
 @pytest.fixture
-def client(nav_config: NavidromeConfig) -> NavidromeClient:
+def remote_config() -> RemoteConfig:
+    """Test Remote config for SSH operations."""
+    return RemoteConfig(
+        host="192.168.1.100",
+        user="testuser",
+        port=22,
+        password="",
+    )
+
+
+@pytest.fixture
+def client(nav_config: NavidromeConfig, remote_config: RemoteConfig) -> NavidromeClient:
     """Create a NavidromeClient with test config."""
-    return NavidromeClient(nav_config)
+    return NavidromeClient(nav_config, remote_config=remote_config)
 
 
 class TestAuthParams:
@@ -160,6 +168,18 @@ class TestRemoteDeletion:
             call_args = mock_run.call_args[0][0]
             assert "-o" in call_args
             assert "StrictHostKeyChecking=accept-new" in call_args
+
+    def test_client_without_remote_config_raises_on_ssh(self) -> None:
+        """NavidromeClient without remote_config should raise RuntimeError on SSH ops."""
+        nav_cfg = NavidromeConfig(
+            url="http://navidrome.test:4533",
+            username="testuser",
+            password="testpass",
+            music_folder="/data/music",
+        )
+        client_no_remote = NavidromeClient(nav_cfg)
+        with pytest.raises(RuntimeError, match="No remote config"):
+            client_no_remote._ssh_cmd("echo", "test")
 
 
 class TestClose:

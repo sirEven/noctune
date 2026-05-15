@@ -6,6 +6,17 @@ from pydantic import BaseModel
 
 from noctune.genres import GENRE_VOCABULARY
 
+class RemoteConfig(BaseModel):
+    """SSH connection to the remote machine running Navidrome.
+
+    Single source of truth — used for rsync, SSH commands, and path probing.
+    """
+
+    host: str = "192.168.178.107"
+    port: int = 22
+    user: str = "eversin"
+    password: str = ""  # empty = key-based auth only
+
 
 class NavidromeConfig(BaseModel):
     """Navidrome Subsonic API configuration for library browsing and deletion."""
@@ -14,10 +25,6 @@ class NavidromeConfig(BaseModel):
     username: str = "eversin"
     password: str = ""
     music_folder: str = "/data/music"
-    ssh_host: str = "192.168.178.107"
-    ssh_user: str = "eversin"
-    ssh_password: str = ""  # empty = key-based auth only
-    ssh_port: int = 22
 
 
 class LLMConfig(BaseModel):
@@ -37,9 +44,8 @@ class NoctuneConfig(BaseModel):
     """Root configuration for Noctune."""
 
     source_dir: Path
-    dest_host: str = "192.168.178.107"
-    dest_user: str = "eversin"
     dest_dir: Path = Path("/data/music")
+    remote: RemoteConfig = RemoteConfig()
     valid_extensions: list[str] = [".mp3", ".flac", ".wav", ".m4a", ".ogg", ".aac"]
     genre_vocabulary: list[str] = list(GENRE_VOCABULARY)
     llm: LLMConfig = LLMConfig()

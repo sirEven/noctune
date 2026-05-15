@@ -9,8 +9,6 @@ class Settings(BaseSettings):
     """Runtime settings — overridable via NOCTUNE_ prefixed env vars or .env file."""
 
     source_dir: Path = Path("~/Music/Incoming").expanduser()
-    dest_host: str = "192.168.178.107"
-    dest_user: str = "eversin"
     dest_dir: Path = Path("/data/music")
     db_path: Path = Path("~/.noctune/state.db").expanduser()
     config_path: Path = Path("~/.noctune/config.yaml").expanduser()

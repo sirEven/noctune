@@ -24,7 +24,7 @@ from noctune.config_loader import load_config
 from noctune.daemon import DaemonManager, DaemonState
 from noctune.extract import extract_metadata
 from noctune.llm_router import LLMRouter
-from noctune.models.config import LLMConfig, NoctuneConfig
+from noctune.models.config import LLMConfig, NoctuneConfig, RemoteConfig
 from noctune.models.pipeline import FileState, PipelineStatus
 from noctune.models.track import TagSet
 from noctune.normalize import compute_target_path, preview_normalization
@@ -107,8 +107,10 @@ def config(music_dir: Path, dest_dir: Path) -> NoctuneConfig:
     """Create a test config."""
     return NoctuneConfig(
         source_dir=music_dir,
-        dest_host="localhost",
-        dest_user="test",
+        remote=RemoteConfig(
+            host="localhost",
+            user="test",
+        ),
         dest_dir=dest_dir,
         genre_vocabulary=["Rock", "Pop", "Electronic", "Jazz", "Alternative Rock"],
         confidence_threshold=0.8,

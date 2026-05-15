@@ -56,8 +56,9 @@ class TestCLIScan:
             incoming.mkdir()
 
             config_content = f"""source_dir: {incoming}
-dest_host: localhost
-dest_user: test
+remote:
+  host: localhost
+  user: test
 dest_dir: {tmpdir_path}/dest
 llm:
   direction: local
@@ -85,8 +86,9 @@ llm:
             (incoming / "test.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
 
             config_content = f"""source_dir: {incoming}
-dest_host: localhost
-dest_user: test
+remote:
+  host: localhost
+  user: test
 dest_dir: {tmpdir_path}/dest
 llm:
   direction: local

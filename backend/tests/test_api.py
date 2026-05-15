@@ -7,10 +7,9 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 
 from noctune.main import create_app
-from noctune.models.config import NoctuneConfig, LLMConfig
+from noctune.models.config import NoctuneConfig, LLMConfig, RemoteConfig
 from noctune.models.pipeline import FileState
 from noctune.store import StateStore
-
 
 # Create a test app instance with defaults (no config file needed)
 app = create_app()
@@ -20,8 +19,10 @@ app = create_app()
 def test_config(tmp_path: Path) -> NoctuneConfig:
     return NoctuneConfig(
         source_dir=tmp_path / "incoming",
-        dest_host="192.168.178.107",
-        dest_user="eversin",
+        remote=RemoteConfig(
+            host="192.168.178.107",
+            user="eversin",
+        ),
         dest_dir=Path("/data/music"),
         genre_vocabulary=["Rock", "Pop", "Electronic", "Jazz"],
         llm=LLMConfig(direction="local"),

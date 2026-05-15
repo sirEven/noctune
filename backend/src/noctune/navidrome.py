@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from noctune.models.config import NavidromeConfig
+from noctune.models.config import NavidromeConfig, RemoteConfig
 
 
 class SubsonicError(Exception):
@@ -38,8 +38,9 @@ class NavidromeClient:
     API_VERSION = "1.16.1"
     CLIENT_NAME = "noctune"
 
-    def __init__(self, config: NavidromeConfig) -> None:
+    def __init__(self, config: NavidromeConfig, remote_config: RemoteConfig | None = None) -> None:
         self._config = config
+        self._remote_config = remote_config
         self._base_url = config.url.rstrip("/")
         self._client = httpx.Client(timeout=30.0)
 
@@ -137,13 +138,16 @@ class NavidromeClient:
 
     def _ssh_cmd(self, *args: str) -> list[str]:
         """Build an SSH command list, using sshpass if password is configured."""
+        if self._remote_config is None:
+            raise RuntimeError("No remote config available for SSH operations")
+
         ssh_opts = [
             "-o", "StrictHostKeyChecking=accept-new",
-            "-p", str(self._config.ssh_port),
+            "-p", str(self._remote_config.port),
         ]
-        target = f"{self._config.ssh_user}@{self._config.ssh_host}"
-        if self._config.ssh_password:
-            return ["sshpass", "-p", self._config.ssh_password, "ssh", *ssh_opts, target, *args]
+        target = f"{self._remote_config.user}@{self._remote_config.host}"
+        if self._remote_config.password:
+            return ["sshpass", "-p", self._remote_config.password, "ssh", *ssh_opts, target, *args]
         return ["ssh", *ssh_opts, target, *args]
 
     def resolve_remote_path(self, relative_path: str) -> str:

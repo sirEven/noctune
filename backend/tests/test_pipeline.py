@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from noctune.models.config import LLMConfig, NoctuneConfig
+from noctune.models.config import LLMConfig, NoctuneConfig, RemoteConfig
 from noctune.models.pipeline import FileState, PipelineStatus
 from noctune.models.track import TagSet
 from noctune.pipeline import Pipeline
@@ -14,8 +14,10 @@ def make_config(tmp_path: Path) -> NoctuneConfig:
     """Create a test config."""
     return NoctuneConfig(
         source_dir=tmp_path / "incoming",
-        dest_host="192.168.178.107",
-        dest_user="eversin",
+        remote=RemoteConfig(
+            host="192.168.178.107",
+            user="eversin",
+        ),
         dest_dir=Path("/data/music"),
         genre_vocabulary=["Rock", "Pop", "Electronic", "Jazz"],
         llm=LLMConfig(direction="local"),
