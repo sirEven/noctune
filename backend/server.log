@@ -24,3 +24,10 @@ INFO:     127.0.0.1:36146 - "GET /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:36148 - "GET /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:58104 - "GET /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:58110 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53600 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38348 - "GET /api/settings/navidrome/test HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:38354 - "PUT /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43990 - "GET /api/settings/paths/local HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48958 - "GET /api/settings/paths/remote HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:33284 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54184 - "GET /api/config HTTP/1.1" 200 OK

@@ -16,6 +16,7 @@ class NavidromeConfig(BaseModel):
     music_folder: str = "/data/music"
     ssh_host: str = "192.168.178.107"
     ssh_user: str = "eversin"
+    ssh_password: str = ""  # empty = key-based auth only
     ssh_port: int = 22
 
 

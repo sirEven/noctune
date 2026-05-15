@@ -49,7 +49,8 @@ navidrome:
   url: http://192.168.178.107:4533
   username: eversin
   password: ""              # set via env var or config
-  music_folder: /data/music # absolute path on the Pi where music lives
+  music_folder: /data/music # absolute path on the remote machine where music lives
   ssh_host: 192.168.178.107
   ssh_user: eversin
+  ssh_password: ""         # empty = key-based auth only
   ssh_port: 22

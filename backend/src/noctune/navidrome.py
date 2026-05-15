@@ -135,8 +135,19 @@ class NavidromeClient:
 
     # --- File operations via SSH ---
 
+    def _ssh_cmd(self, *args: str) -> list[str]:
+        """Build an SSH command list, using sshpass if password is configured."""
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-p", str(self._config.ssh_port),
+        ]
+        target = f"{self._config.ssh_user}@{self._config.ssh_host}"
+        if self._config.ssh_password:
+            return ["sshpass", "-p", self._config.ssh_password, "ssh", *ssh_opts, target, *args]
+        return ["ssh", *ssh_opts, target, *args]
+
     def resolve_remote_path(self, relative_path: str) -> str:
-        """Convert a Navidrome relative path to an absolute path on the Pi."""
+        """Convert a Navidrome relative path to an absolute path on the remote machine."""
         return str(Path(self._config.music_folder) / relative_path)
 
     def delete_remote_file(self, relative_path: str) -> bool:
@@ -150,13 +161,7 @@ class NavidromeClient:
         """
         abs_path = self.resolve_remote_path(relative_path)
         result = subprocess.run(
-            [
-                "ssh",
-                "-o", "StrictHostKeyChecking=accept-new",
-                "-p", str(self._config.ssh_port),
-                f"{self._config.ssh_user}@{self._config.ssh_host}",
-                "rm", "--", abs_path,
-            ],
+            self._ssh_cmd("rm", "--", abs_path),
             capture_output=True,
             text=True,
             timeout=30,
@@ -176,13 +181,7 @@ class NavidromeClient:
         """
         abs_path = self.resolve_remote_path(relative_path)
         result = subprocess.run(
-            [
-                "ssh",
-                "-o", "StrictHostKeyChecking=accept-new",
-                "-p", str(self._config.ssh_port),
-                f"{self._config.ssh_user}@{self._config.ssh_host}",
-                "rm", "-rf", "--", abs_path,
-            ],
+            self._ssh_cmd("rm", "-rf", "--", abs_path),
             capture_output=True,
             text=True,
             timeout=30,

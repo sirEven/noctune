@@ -81,17 +81,68 @@ DOCKER_CONFIG_CANDIDATES = [
 ]
 
 
-def _ssh_command(host: str, user: str, port: int, command: str, timeout: int = 10) -> tuple[int, str, str]:
-    """Run a command on the remote host via SSH. Returns (returncode, stdout, stderr)."""
-    result = subprocess.run(
-        ["ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
-         "-p", str(port), f"{user}@{host}", command],
-        capture_output=True, text=True, timeout=timeout,
-    )
+def _ssh_command(
+    host: str, user: str, port: int, command: str,
+    password: str = "", timeout: int = 10,
+) -> tuple[int, str, str]:
+    """Run a command on the remote host via SSH. Returns (returncode, stdout, stderr).
+
+    If password is provided, uses sshpass. Otherwise assumes key-based auth.
+    """
+    ssh_opts = [
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",  # fail fast if key auth doesn't work
+        "-p", str(port),
+    ]
+
+    if password:
+        # Use sshpass for password-based auth
+        result = subprocess.run(
+            ["sshpass", "-p", password, "ssh", *ssh_opts, f"{user}@{host}", command],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    else:
+        result = subprocess.run(
+            ["ssh", *ssh_opts, f"{user}@{host}", command],
+            capture_output=True, text=True, timeout=timeout,
+        )
+
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
-def probe_remote_paths(host: str, user: str, port: int = 22) -> dict[str, list[dict[str, str | bool]]]:
+def _ssh_available(host: str, user: str, port: int = 22, password: str = "") -> tuple[bool, str]:
+    """Check if SSH connection is possible. Returns (ok, message)."""
+    rc, stdout, stderr = _ssh_command(host, user, port, "echo ok", password=password, timeout=10)
+
+    if rc == 0 and "ok" in stdout:
+        return True, "SSH connection successful"
+
+    # Decode common errors into friendly messages
+    err_lower = stderr.lower()
+    if "permission denied" in err_lower or "permission denied" in stdout.lower():
+        if password:
+            return False, f"SSH auth failed — wrong password for {user}@{host}"
+        return False, f"SSH key auth failed for {user}@{host} — no matching key found. Add your public key to the remote machine, or set an SSH password in settings."
+    if "connection refused" in err_lower:
+        return False, f"Connection refused — SSH not running on {host}:{port}"
+    if "connection timed out" in err_lower or "timed out" in err_lower:
+        return False, f"Connection timed out — {host}:{port} unreachable. Is the machine online?"
+    if "no route to host" in err_lower:
+        return False, f"No route to host — {host} is unreachable. Check the IP/hostname."
+    if "host key" in err_lower:
+        return False, f"Host key verification failed — remove old key for {host} in ~/.ssh/known_hosts"
+    if "could not resolve" in err_lower:
+        return False, f"Could not resolve hostname — {host} not found"
+
+    # Generic fallback
+    detail = stderr.strip() or stdout.strip() or f"exit code {rc}"
+    return False, f"SSH failed: {detail}"
+
+
+def probe_remote_paths(
+    host: str, user: str, port: int = 22, password: str = "",
+) -> dict:
     """Probe the remote machine for likely Navidrome music folder and config.
 
     Checks:
@@ -100,11 +151,19 @@ def probe_remote_paths(host: str, user: str, port: int = 22) -> dict[str, list[d
     3. Docker container config mounts
     4. Docker inspect for volume mounts (if running in Docker)
     """
+    # First check if SSH works at all
+    ssh_ok, ssh_msg = _ssh_available(host, user, port, password)
+    if not ssh_ok:
+        return {
+            "music_folder": [],
+            "error": ssh_msg,
+        }
+
     music_candidates = []
 
     # 1. Check common paths
     for path in REMOTE_MUSIC_CANDIDATES:
-        rc, _, _ = _ssh_command(host, user, port, f"test -d {path} && echo yes")
+        rc, _, _ = _ssh_command(host, user, port, f"test -d {path} && echo yes", password=password)
         music_candidates.append({
             "path": path,
             "exists": rc == 0,
@@ -113,7 +172,7 @@ def probe_remote_paths(host: str, user: str, port: int = 22) -> dict[str, list[d
 
     # 2. Check Navidrome config files for MusicFolder
     for config_path in REMOTE_NAVIDROME_CONFIG_PATHS:
-        rc, stdout, _ = _ssh_command(host, user, port, f"cat {config_path} 2>/dev/null")
+        rc, stdout, _ = _ssh_command(host, user, port, f"cat {config_path} 2>/dev/null", password=password)
         if rc == 0 and "MusicFolder" in stdout:
             # Extract MusicFolder value
             for line in stdout.splitlines():
@@ -131,7 +190,8 @@ def probe_remote_paths(host: str, user: str, port: int = 22) -> dict[str, list[d
         host, user, port,
         "docker inspect navidrome 2>/dev/null | grep -A5 Binds || "
         "docker ps --filter name=navidrome --format '{{.ID}}' | head -1 | "
-        "xargs -r docker inspect | grep -A5 Binds"
+        "xargs -r docker inspect | grep -A5 Binds",
+        password=password,
     )
     if rc == 0 and stdout:
         # Look for /data/music or similar paths in Docker binds
@@ -150,7 +210,8 @@ def probe_remote_paths(host: str, user: str, port: int = 22) -> dict[str, list[d
     # 4. Check if Navidrome is running and get its actual data folder
     rc, stdout, _ = _ssh_command(
         host, user, port,
-        "docker ps --filter name=navidrome --format '{{.ID}}'"
+        "docker ps --filter name=navidrome --format '{{.ID}}'",
+        password=password,
     )
     if rc == 0 and stdout.strip():
         # Found a running Navidrome container — check its env for ND_MUSICFOLDER
@@ -158,7 +219,8 @@ def probe_remote_paths(host: str, user: str, port: int = 22) -> dict[str, list[d
         rc2, stdout2, _ = _ssh_command(
             host, user, port,
             f"docker exec {container_id} env 2>/dev/null | grep ND_MUSICFOLDER || "
-            f"docker exec {container_id} cat /data/navidrome.toml 2>/dev/null | grep MusicFolder"
+            f"docker exec {container_id} cat /data/navidrome.toml 2>/dev/null | grep MusicFolder",
+            password=password,
         )
         if rc2 == 0 and stdout2.strip():
             for line in stdout2.splitlines():
@@ -187,6 +249,9 @@ def probe_navidrome_connection(url: str, username: str, password: str) -> dict[s
     """
     import httpx
 
+    if not url:
+        return {"reachable": False, "auth_ok": False, "version": "", "error": "No Navidrome URL configured — enter the URL in settings first"}
+
     try:
         client = httpx.Client(timeout=10.0)
         # Use token auth
@@ -211,8 +276,8 @@ def probe_navidrome_connection(url: str, username: str, password: str) -> dict[s
         return {"reachable": True, "auth_ok": False, "version": "", "error": error}
 
     except httpx.ConnectError:
-        return {"reachable": False, "auth_ok": False, "version": "", "error": "Connection refused"}
+        return {"reachable": False, "auth_ok": False, "version": "", "error": f"Connection refused — is Navidrome running at {url}?"}
     except httpx.TimeoutException:
-        return {"reachable": False, "auth_ok": False, "version": "", "error": "Connection timeout"}
+        return {"reachable": False, "auth_ok": False, "version": "", "error": f"Connection timeout — {url} didn't respond. Check the URL and that Navidrome is running"}
     except Exception as e:
         return {"reachable": False, "auth_ok": False, "version": "", "error": str(e)}

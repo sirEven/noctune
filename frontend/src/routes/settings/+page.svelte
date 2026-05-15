@@ -33,13 +33,14 @@
 			music_folder: string;
 			ssh_host: string;
 			ssh_user: string;
+			ssh_password: string;
 			ssh_port: number;
 		} | null;
 	}
 
 	let config = $state<Config | null>(null);
 	let localPaths = $state<{ source: PathCandidate[]; dest: PathCandidate[] } | null>(null);
-	let remotePaths = $state<{ music_folder: MusicCandidate[] } | null>(null);
+	let remotePaths = $state<{ music_folder: MusicCandidate[]; error?: string } | null>(null);
 	let navidromeTest = $state<NavidromeTest | null>(null);
 	let loading = $state(false);
 	let saving = $state(false);
@@ -60,6 +61,7 @@
 	let navidromeMusicFolder = $state('');
 	let navidromeSshHost = $state('');
 	let navidromeSshUser = $state('');
+	let navidromeSshPassword = $state('');
 	let navidromeSshPort = $state(22);
 
 	async function loadConfig() {
@@ -79,6 +81,7 @@
 				navidromeMusicFolder = data.navidrome.music_folder ?? '';
 				navidromeSshHost = data.navidrome.ssh_host ?? '';
 				navidromeSshUser = data.navidrome.ssh_user ?? '';
+				navidromeSshPassword = ''; // don't pre-fill password
 				navidromeSshPort = data.navidrome.ssh_port ?? 22;
 			}
 		} catch (e) {
@@ -100,6 +103,10 @@
 			if (navidromeUsername) body.navidrome_username = navidromeUsername;
 			if (navidromePassword) body.navidrome_password = navidromePassword;
 			if (navidromeMusicFolder) body.navidrome_music_folder = navidromeMusicFolder;
+			if (navidromeSshHost) body.navidrome_ssh_host = navidromeSshHost;
+			if (navidromeSshUser) body.navidrome_ssh_user = navidromeSshUser;
+			if (navidromeSshPassword) body.navidrome_ssh_password = navidromeSshPassword;
+			if (navidromeSshPort) body.navidrome_ssh_port = navidromeSshPort;
 
 			const res = await fetch('/api/config', {
 				method: 'PUT',
@@ -135,13 +142,20 @@
 	async function probeRemote() {
 		probingRemote = true;
 		error = null;
+		remotePaths = null;
 		try {
+			// Save config first so the backend has SSH credentials
+			await saveConfig();
 			const res = await fetch('/api/settings/paths/remote');
 			if (!res.ok) {
 				const err = await res.json();
 				throw new Error(err.detail || `HTTP ${res.status}`);
 			}
-			remotePaths = await res.json();
+			const data = await res.json();
+			remotePaths = data;
+			if (data.error) {
+				error = data.error;
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to probe remote paths';
 		} finally {
@@ -152,11 +166,10 @@
 	async function testNavidrome() {
 		testingNavidrome = true;
 		error = null;
+		navidromeTest = null;
 		try {
-			// Save first if changed
-			if (navidromeUrl || navidromeUsername || navidromePassword) {
-				await saveConfig();
-			}
+			// Save config first so the backend has the credentials
+			await saveConfig();
 			const res = await fetch('/api/settings/navidrome/test');
 			if (!res.ok) {
 				const err = await res.json();
@@ -218,7 +231,7 @@
 				</div>
 			</div>
 
-			<!-- Local path suggestions — right under the field they're for -->
+			<!-- Local path suggestions right under the field -->
 			{#if localPaths}
 				<div>
 					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on this machine</p>
@@ -342,40 +355,72 @@
 
 			<!-- Remote path suggestions -->
 			{#if remotePaths}
-				<div>
-					<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
-					<div class="space-y-1">
-						{#each remotePaths.music_folder as candidate}
-							<button
-								class="w-full text-left px-3 py-1.5 rounded text-xs transition-colors {candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
-								onclick={() => { if (candidate.exists) navidromeMusicFolder = candidate.path; }}
-								disabled={!candidate.exists}
-							>
-								{candidate.path} {candidate.exists ? '✓' : '✗'}
-								<span class="text-text-muted">({candidate.source})</span>
-							</button>
-						{/each}
+				{#if remotePaths.error}
+					<div class="p-3 bg-error/10 border border-error/30 rounded-md text-error text-xs">
+						{remotePaths.error}
 					</div>
-				</div>
+				{:else if remotePaths.music_folder?.length > 0}
+					<div>
+						<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Found on remote</p>
+						<div class="space-y-1">
+							{#each remotePaths.music_folder as candidate}
+								<button
+									class="w-full text-left px-3 py-1.5 rounded text-xs transition-colors {candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
+									onclick={() => { if (candidate.exists) navidromeMusicFolder = candidate.path; }}
+									disabled={!candidate.exists}
+								>
+									{candidate.path} {candidate.exists ? '✓' : '✗'}
+									<span class="text-text-muted">({candidate.source})</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			{/if}
 
-			<div class="grid grid-cols-2 gap-4">
-				<div>
-					<label for="ssh-host" class="block text-sm font-medium text-text-secondary mb-1">SSH Host</label>
-					<input
-						id="ssh-host"
-						type="text"
-						bind:value={navidromeSshHost}
-						placeholder="192.168.178.107"
-						class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
-					/>
+			<!-- SSH Access -->
+			<div class="border-t border-border pt-4 mt-2">
+				<p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-3">SSH Access</p>
+				<p class="text-xs text-text-muted mb-3">Used for remote commands (path probing, file deletion). Leave password empty if you use SSH key auth.</p>
+				<div class="grid grid-cols-3 gap-4">
+					<div>
+						<label for="ssh-host" class="block text-sm font-medium text-text-secondary mb-1">SSH Host</label>
+						<input
+							id="ssh-host"
+							type="text"
+							bind:value={navidromeSshHost}
+							placeholder="192.168.178.107"
+							class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
+						/>
+					</div>
+					<div>
+						<label for="ssh-port" class="block text-sm font-medium text-text-secondary mb-1">SSH Port</label>
+						<input
+							id="ssh-port"
+							type="number"
+							bind:value={navidromeSshPort}
+							class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
+						/>
+					</div>
+					<div>
+						<label for="ssh-user" class="block text-sm font-medium text-text-secondary mb-1">SSH User</label>
+						<input
+							id="ssh-user"
+							type="text"
+							bind:value={navidromeSshUser}
+							placeholder="eversin"
+							class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
+						/>
+					</div>
 				</div>
-				<div>
-					<label for="ssh-port" class="block text-sm font-medium text-text-secondary mb-1">SSH Port</label>
+				<div class="mt-3">
+					<label for="ssh-password" class="block text-sm font-medium text-text-secondary mb-1">SSH Password</label>
+					<p class="text-xs text-text-muted mb-1">Leave empty if using key-based auth (recommended)</p>
 					<input
-						id="ssh-port"
-						type="number"
-						bind:value={navidromeSshPort}
+						id="ssh-password"
+						type="password"
+						bind:value={navidromeSshPassword}
+						placeholder="••••••••"
 						class="w-full px-3 py-2 bg-surface-700 border border-border rounded-md text-text-primary text-sm focus:outline-none focus:border-primary transition-colors"
 					/>
 				</div>

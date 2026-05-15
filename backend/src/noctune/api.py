@@ -440,15 +440,24 @@ async def settings_paths_local() -> dict[str, list[dict[str, str | bool]]]:
 
 
 @router.get("/settings/paths/remote")
-async def settings_paths_remote() -> dict[str, list[dict[str, str | bool]]]:
-    """Probe the remote Pi for likely Navidrome music folder paths."""
+async def settings_paths_remote() -> dict:
+    """Probe the remote machine for likely Navidrome music folder paths."""
     config = get_config()
     if config.navidrome is None:
-        raise HTTPException(status_code=503, detail="Navidrome not configured — set ssh_host in navidrome config")
+        raise HTTPException(
+            status_code=424,
+            detail="Navidrome not configured — go to Settings and fill in the Remote Host, SSH User, and Navidrome URL first",
+        )
+    if not config.navidrome.ssh_host:
+        raise HTTPException(
+            status_code=424,
+            detail="Remote Host not set — enter the IP or hostname of your remote machine in Settings",
+        )
     return probe_remote_paths(
         host=config.navidrome.ssh_host,
         user=config.navidrome.ssh_user,
         port=config.navidrome.ssh_port,
+        password=config.navidrome.ssh_password,
     )
 
 
@@ -457,7 +466,15 @@ async def settings_navidrome_test() -> dict[str, str | bool]:
     """Test connection to Navidrome — checks reachability and auth."""
     config = get_config()
     if config.navidrome is None:
-        raise HTTPException(status_code=503, detail="Navidrome not configured")
+        raise HTTPException(
+            status_code=424,
+            detail="Navidrome not configured — enter the URL, username, and password in Settings first",
+        )
+    if not config.navidrome.url:
+        raise HTTPException(
+            status_code=424,
+            detail="Navidrome URL not set — enter it in Settings first",
+        )
     return probe_navidrome_connection(
         url=config.navidrome.url,
         username=config.navidrome.username,
@@ -475,6 +492,10 @@ class ConfigUpdate(BaseModel):
     navidrome_username: str | None = None
     navidrome_password: str | None = None
     navidrome_music_folder: str | None = None
+    navidrome_ssh_host: str | None = None
+    navidrome_ssh_user: str | None = None
+    navidrome_ssh_password: str | None = None
+    navidrome_ssh_port: int | None = None
 
 
 @router.put("/config")
@@ -497,7 +518,9 @@ async def update_config(update: ConfigUpdate) -> dict[str, Any]:
     if update.dest_user is not None:
         config.dest_user = update.dest_user
     if any([update.navidrome_url, update.navidrome_username,
-            update.navidrome_password, update.navidrome_music_folder]):
+            update.navidrome_password, update.navidrome_music_folder,
+            update.navidrome_ssh_host, update.navidrome_ssh_user,
+            update.navidrome_ssh_password, update.navidrome_ssh_port]):
         if config.navidrome is None:
             config.navidrome = NavidromeConfig()
         assert config.navidrome is not None  # guaranteed after assignment
@@ -509,6 +532,14 @@ async def update_config(update: ConfigUpdate) -> dict[str, Any]:
             config.navidrome.password = update.navidrome_password
         if update.navidrome_music_folder is not None:
             config.navidrome.music_folder = update.navidrome_music_folder
+        if update.navidrome_ssh_host is not None:
+            config.navidrome.ssh_host = update.navidrome_ssh_host
+        if update.navidrome_ssh_user is not None:
+            config.navidrome.ssh_user = update.navidrome_ssh_user
+        if update.navidrome_ssh_password is not None:
+            config.navidrome.ssh_password = update.navidrome_ssh_password
+        if update.navidrome_ssh_port is not None:
+            config.navidrome.ssh_port = update.navidrome_ssh_port
         # Reset cached client so next request uses new config
         global _navidrome_client
         if _navidrome_client is not None:
