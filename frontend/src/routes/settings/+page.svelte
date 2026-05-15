@@ -8,10 +8,12 @@
 		is_dir: boolean;
 	}
 
-	interface MusicCandidate {
+		interface MusicCandidate {
 		path: string;
 		exists: boolean;
 		source: string;
+		label: string;
+		recommended: boolean;
 	}
 
 	interface NavidromeTest {
@@ -437,17 +439,25 @@
 						<div class="space-y-1">
 							{#each remotePaths.music_folder as candidate}
 								<button
-									class="w-full text-left px-3 py-1.5 rounded text-xs transition-colors {candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
+									class="w-full text-left px-3 py-2 rounded text-xs transition-colors {candidate.recommended ? 'bg-primary/15 border border-primary/40 text-text-primary' : candidate.exists ? 'bg-surface-700 hover:bg-surface-600 text-text-primary' : 'bg-surface-800 text-text-muted'}"
 									onclick={() => {
-										if (candidate.exists) {
+										if (candidate.exists || candidate.recommended) {
 											navidromeMusicFolder = candidate.path;
 											destDir = candidate.path;
 										}
 									}}
-									disabled={!candidate.exists}
+									disabled={!candidate.exists && !candidate.recommended}
 								>
-									{candidate.path} {candidate.exists ? '✓' : '✗'}
-									<span class="text-text-muted">({candidate.source})</span>
+									<div class="flex items-center gap-2">
+										{#if candidate.recommended}
+											<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary text-white leading-none">RECOMMENDED</span>
+										{/if}
+										<span class="font-medium">{candidate.path}</span>
+										{#if !candidate.exists}
+											<span class="text-text-muted">✗ not found</span>
+										{/if}
+									</div>
+									<div class="text-text-muted mt-0.5">{candidate.label}</div>
 								</button>
 							{/each}
 						</div>
