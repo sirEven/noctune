@@ -189,9 +189,18 @@
 </script>
 
 <div class="p-6 max-w-2xl">
-	<div class="mb-6">
-		<h2 class="text-2xl font-semibold text-text-primary">Settings</h2>
-		<p class="text-sm text-text-secondary mt-1">Configure Noctune directories and Navidrome connection</p>
+	<div class="sticky top-0 z-10 -mx-6 -mt-6 px-6 py-4 bg-surface-900/95 backdrop-blur border-b border-border flex items-center justify-between mb-6">
+		<div>
+			<h2 class="text-2xl font-semibold text-text-primary">Settings</h2>
+			<p class="text-xs text-text-muted">Configure Noctune directories and Navidrome connection</p>
+		</div>
+		<button
+			class="px-6 py-2 bg-primary hover:bg-primary-hover text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 shrink-0"
+			onclick={saveConfig}
+			disabled={saving}
+		>
+			{saving ? 'Saving...' : 'Save Settings'}
+		</button>
 	</div>
 
 	{#if message}
@@ -451,14 +460,5 @@
 		</div>
 	</div>
 
-	<!-- Save -->
-	<div class="flex items-center gap-3">
-		<button
-			class="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50"
-			onclick={saveConfig}
-			disabled={saving}
-		>
-			{saving ? 'Saving...' : 'Save Settings'}
-		</button>
-	</div>
+
 </div>
