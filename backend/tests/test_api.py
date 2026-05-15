@@ -6,10 +6,14 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient, ASGITransport
 
-from noctune.main import app
+from noctune.main import create_app
 from noctune.models.config import NoctuneConfig, LLMConfig
 from noctune.models.pipeline import FileState
 from noctune.store import StateStore
+
+
+# Create a test app instance with defaults (no config file needed)
+app = create_app()
 
 
 @pytest.fixture

@@ -7,14 +7,25 @@ import yaml
 from noctune.models.config import NoctuneConfig
 
 
-def load_config(path: Path) -> NoctuneConfig:
+def load_config(path: Path = Path("~/.noctune/config.yaml")) -> NoctuneConfig:
     """Load Noctune configuration from a YAML file.
 
+    If the file doesn't exist, returns defaults.
     Expands ~ in source_dir, converts dest_dir to Path,
     and validates against the NoctuneConfig Pydantic model.
     """
-    with open(path) as f:
-        raw = yaml.safe_load(f)
+    resolved = Path(path).expanduser()
+
+    if not resolved.exists():
+        # Return defaults — the daemon/scan commands will use config from CLI
+        from noctune.models.config import LLMConfig
+        return NoctuneConfig(
+            source_dir=Path("~/Music/Incoming").expanduser(),
+            llm=LLMConfig(),
+        )
+
+    with open(resolved) as f:
+        raw = yaml.safe_load(f) or {}
 
     # Expand ~ in source_dir before Pydantic validation
     if "source_dir" in raw:
